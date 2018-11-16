@@ -1,14 +1,6 @@
 package org.openrndr.dnky
 
-import org.openrndr.draw.VertexBuffer
 import org.openrndr.math.Matrix44
-
-
-@DslMarker
-annotation class SceneMarker
-
-@DslMarker
-annotation class SceneNodeMarker
 
 class Scene(val root: SceneNode = SceneNode())
 
@@ -50,14 +42,6 @@ fun <P> SceneNode.findContent(selector: SceneNode.()->P?) : List<P> {
     return result
 }
 
-//private fun scanTest() {
-//    val s = SceneNode()
-//    s.scan(Matrix44.IDENTITY) { p ->
-//        transform *= p
-//        transform
-//    }
-//}
-
 fun scene(init: Scene.() -> Unit): Scene {
     val scene = Scene()
     scene.init()
@@ -84,11 +68,13 @@ fun SceneNode.draw(call: () -> Unit) {
     draw = call
 }
 
+
 fun SceneNode.mesh(geometry: Geometry, material: Material, init: Mesh.() -> Unit = {}): Mesh {
     val mesh = Mesh(geometry, material).apply(init)
     entity = mesh
     return mesh
 }
+
 
 fun SceneNode.pointLight(init: PointLight.() -> Unit): PointLight {
     val pointLight = PointLight().apply(init)
