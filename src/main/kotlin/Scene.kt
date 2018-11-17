@@ -75,10 +75,6 @@ fun SceneNode.node(init: SceneNode.() -> Unit): SceneNode {
     return node
 }
 
-//fun SceneNode.draw(call: () -> Unit) {
-//    draw = call
-//}
-
 fun SceneNode.mesh(geometry: Geometry, material: Material, init: Mesh.() -> Unit = {}): Mesh {
     val mesh = Mesh(geometry, material).apply(init)
     entities.add(mesh)
@@ -100,7 +96,6 @@ fun SceneNode.instancedMesh(init: InstancedMesh.() -> Unit): InstancedMesh {
     return instanced
 }
 
-
 fun SceneNode.pointLight(init: PointLight.() -> Unit): PointLight {
     val pointLight = PointLight().apply(init)
     entities.add(pointLight)
@@ -117,6 +112,12 @@ fun SceneNode.ambientLight(init: AmbientLight.() -> Unit): AmbientLight {
     val ambientLight = AmbientLight().apply(init)
     entities.add(ambientLight)
     return ambientLight
+}
+
+fun SceneNode.fog(init:Fog.() -> Unit) : Fog {
+    val fog = Fog().apply(init)
+    entities.add(fog)
+    return fog
 }
 
 private fun sample() {

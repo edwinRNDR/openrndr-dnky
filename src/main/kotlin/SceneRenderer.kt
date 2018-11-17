@@ -6,10 +6,6 @@ import org.openrndr.math.Matrix44
 class SceneRenderer {
 
     fun draw(drawer: Drawer, scene: Scene, camera: Camera) {
-        // -- call all draw() functions
-//        scene.root.visit {
-//            draw?.invoke()
-//        }
         scene.drawFunctions.forEach {
             it()
         }
@@ -22,9 +18,11 @@ class SceneRenderer {
 
         val lights = scene.root.findContent { this as? Light }
         val meshes = scene.root.findContent { this as? Mesh }
+        val fogs = scene.root.findContent { this as? Fog }
         val instancedMeshes = scene.root.findContent { this as? InstancedMesh }
 
-        val materialContext = MaterialContext(lights)
+
+        val materialContext = MaterialContext(lights, fogs)
 
         meshes.forEach {
             val mesh = it.content

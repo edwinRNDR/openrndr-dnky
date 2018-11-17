@@ -8,7 +8,7 @@ import org.openrndr.math.Vector3
 import org.openrndr.math.Vector4
 import org.openrndr.math.transforms.normalMatrix
 
-data class MaterialContext(val lights: List<NodeContent<Light>>)
+data class MaterialContext(val lights: List<NodeContent<Light>>, val fogs: List<NodeContent<Fog>>)
 
 interface Material {
     fun generateShadeStyle(context: MaterialContext): ShadeStyle
@@ -51,13 +51,28 @@ class BasicMaterial : Material {
             """.trimIndent()
                     is DirectionalLight -> """
                 {
-                    light += max(0, dot(wnn , p_lightDirection$index)) * p_lightColor$index.rgb * p_diffuse.rgb;
+                    float side = dot(-wnn, p_lightDirection$index);
+                    light += max(0, side) * p_lightColor$index.rgb * p_diffuse.rgb;
+                    if (side > 0.0) {
+                        float f = max(0.0, dot(reflect(p_lightDirection$index, wnn), edn));
+                        light += pow(f, p_shininess) * p_lightColor$index.rgb * p_specular.rgb;
+                    }
+
+
                 }
             """.trimIndent()
                     else -> TODO()
                 }
         }.joinToString("\n")
         }
+
+        ${context.fogs.mapIndexed { index, (node, fog) ->
+           """ {
+                float dz = min(1.0, -v_viewPosition.z/p_fogEnd$index);
+                light = mix(light, p_fogColor$index.rgb, dz);
+                }
+            """
+        }.joinToString("\n")}
         x_fill.rgb = light;
         x_fill.a = 1.0;
     """.trimIndent()
@@ -102,6 +117,11 @@ class BasicMaterial : Material {
                     shadeStyle.parameter("lightDirection$index", ((normalMatrix(node.worldTransform)) * light.direction).normalized)
                 }
             }
+        }
+
+        context.fogs.forEachIndexed { index, (node, fog) ->
+            shadeStyle.parameter("fogColor$index", fog.color)
+            shadeStyle.parameter("fogEnd$index", fog.end)
         }
     }
 }

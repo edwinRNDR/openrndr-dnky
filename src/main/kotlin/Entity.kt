@@ -49,6 +49,11 @@ abstract class Light : Entity() {
     var color: ColorRGBa = ColorRGBa.WHITE
 }
 
+class Fog : Entity() {
+    var color: ColorRGBa = ColorRGBa.WHITE
+    var end: Double = 100.0
+}
+
 class PointLight(var constantAttenuation: Double = 1.0,
                  var linearAttenuation: Double = 0.0,
                  var quadraticAttenuation: Double = 0.0) : Light()
