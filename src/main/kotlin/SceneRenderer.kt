@@ -17,19 +17,20 @@ class SceneRenderer {
             worldTransform
         }
 
-        val lights = scene.root.findNodes { entity is Light }
-        val meshes = scene.root.findNodes { entity is Mesh }
+        val lights = scene.root.findContent { this as? Light }
+        val meshes = scene.root.findContent { this as? Mesh }
 
         val materialContext = MaterialContext(lights)
 
         meshes.forEach {
-            val mesh = it.entity as Mesh
+            val mesh = it.content
             drawer.isolated {
                 val shadeStyle = mesh.material.generateShadeStyle(materialContext)
+                shadeStyle.parameter("viewMatrixInverse", drawer.view.inversed)
                 mesh.material.applyToShadeStyle(materialContext, shadeStyle)
                 drawer.shadeStyle = shadeStyle
-                drawer.model = it.worldTransform
-                drawer.vertexBuffer((it.entity as Mesh).geometry.vertexBuffers, DrawPrimitive.TRIANGLES)
+                drawer.model = it.node.worldTransform
+                drawer.vertexBuffer(mesh.geometry.vertexBuffers, DrawPrimitive.TRIANGLES)
             }
         }
     }

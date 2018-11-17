@@ -4,7 +4,13 @@ import org.openrndr.math.Matrix44
 
 class Scene(val root: SceneNode = SceneNode())
 
-open class SceneNode(var entity: Entity? = null) {
+
+class NodeContent<T : Entity>(val node: SceneNode, val content: T) {
+    operator fun component1() = node
+    operator fun component2() = content
+}
+
+open class SceneNode(var entities: MutableList<Entity> = mutableListOf()) {
     var parent: SceneNode? = null
     var transform = Matrix44.IDENTITY
     var worldTransform = Matrix44.IDENTITY
@@ -30,13 +36,15 @@ fun SceneNode.findNodes(selector: SceneNode.() -> Boolean): List<SceneNode> {
     return result
 }
 
-fun <P> SceneNode.findContent(selector: SceneNode.() -> P?): List<P> {
-    val result = mutableListOf<P>()
+fun <P:Entity> SceneNode.findContent(selector: Entity.() -> P?): List<NodeContent<P>> {
+    val result = mutableListOf<NodeContent<P>>()
 
     visit {
-        val s = selector()
-        if (s != null) {
-            result.add(s)
+        entities.forEach {
+            val s = it.selector()
+            if (s != null) {
+                result.add(NodeContent(this, s))
+            }
         }
     }
     return result
@@ -70,34 +78,34 @@ fun SceneNode.draw(call: () -> Unit) {
 
 fun SceneNode.mesh(geometry: Geometry, material: Material, init: Mesh.() -> Unit = {}): Mesh {
     val mesh = Mesh(geometry, material).apply(init)
-    entity = mesh
+    entities.add(mesh)
     return mesh
 }
 
 private val DefaultMaterial = BasicMaterial()
-fun SceneNode.mesh(init: Mesh.() -> Unit) : Mesh {
+fun SceneNode.mesh(init: Mesh.() -> Unit): Mesh {
     val mesh = Mesh(DummyGeometry, DefaultMaterial)
     mesh.init()
-    entity = mesh
+    entities.add(mesh)
     return mesh
 }
 
 
 fun SceneNode.pointLight(init: PointLight.() -> Unit): PointLight {
     val pointLight = PointLight().apply(init)
-    entity = pointLight
+    entities.add(pointLight)
     return pointLight
 }
 
 fun SceneNode.directionalLight(init: DirectionalLight.() -> Unit): DirectionalLight {
     val directionalLight = DirectionalLight().apply(init)
-    entity = directionalLight
+    entities.add(directionalLight)
     return directionalLight
 }
 
 fun SceneNode.ambientLight(init: AmbientLight.() -> Unit): AmbientLight {
     val ambientLight = AmbientLight().apply(init)
-    entity = ambientLight
+    entities.add(ambientLight)
     return ambientLight
 }
 

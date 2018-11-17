@@ -22,45 +22,57 @@ import org.openrndr.shape.Circle
 
 fun main() = application {
     program {
+        val outerCylinder = meshVertexBuffer(2_0000)
+        val outerCylinderVertices = outerCylinder.put {
+            extrudeShape(
+                Circle(0.0, 0.0, 16.0).shape, -16.0, 16.0, 0.025, true, bufferWriter(this)
+            )
+        }
+
         val vb = meshVertexBuffer(2_000)
         val vertexCount = vb.put {
             extrudeShape(
-                Circle(0.0, 0.0, 4.0).shape, -0.5, 0.5, 0.025, bufferWriter(this)
+                Circle(0.0, 0.0, 4.0).shape, -2.0, 2.0, 0.025, bufferWriter(this)
             )
         }
         val renderer = SceneRenderer()
         val scene = scene {
+
             node {
+                mesh {
+                    geometry = geometry(vb, vertexCount = vertexCount)
+                }
                 ambientLight {
-                    color = ColorRGBa.GRAY
+                    color = ColorRGBa.PINK
                 }
             }
 
             node {
-                directionalLight {
-                    color = ColorRGBa.RED
+                transform = transform { rotate(Vector3.UNIT_X, 90.0) }
+                mesh {
+                    geometry = geometry(outerCylinder, vertexCount = outerCylinderVertices)
                 }
             }
 
             node {
                 draw {
-                    transform = transform { translate(0.0, 100.0, 50.0 + Math.cos(seconds)*50.0) }
+                    transform = transform { translate(0.0, 8.0, 0.0) }
                 }
                 pointLight {
-                    color = ColorRGBa.BLUE
+                    color = ColorRGBa.PINK.shade(0.1)
                 }
             }
 
             node {
-                mesh(geometry(vb, vertexCount = vertexCount), Material())
-
-                node {
-                    draw {
-                        transform = transform {
-                            translate(Vector3(Math.cos(seconds), 0.0, 2.0))
-                        }
+                transform = transform {
+                    translate(0.0, 14.0, 0.0)
+                    rotate(Vector3.UNIT_X, 90.0)
+                }
+                mesh {
+                    geometry = geometry(vb, vertexCount = vertexCount)
+                    basicMaterial {
+                        diffuse = ColorRGBa.WHITE
                     }
-                    mesh(geometry(vb, vertexCount = vertexCount), Material())
                 }
             }
         }
