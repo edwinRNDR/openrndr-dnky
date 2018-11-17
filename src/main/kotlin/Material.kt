@@ -3,6 +3,8 @@ package org.openrndr.dnky
 import org.openrndr.color.ColorRGBa
 import org.openrndr.draw.ShadeStyle
 import org.openrndr.draw.shadeStyle
+import org.openrndr.math.Vector2
+import org.openrndr.math.Vector3
 import org.openrndr.math.Vector4
 import org.openrndr.math.transforms.normalMatrix
 
@@ -17,11 +19,14 @@ class BasicMaterial : Material {
     var diffuse = ColorRGBa.WHITE
     var specular = ColorRGBa.WHITE
     var shininess = 1.0
+    var vertexTransform : String? = null
+    var fragmentTransform : String? = null
+    var parameters = mutableMapOf<String, Any>()
 
     override fun generateShadeStyle(context: MaterialContext): ShadeStyle {
         val lights = context.lights
         val fs = """
-        vec3 light = vec3(0.0);
+        highp vec3 light = vec3(0.0);
         vec3 wnn = normalize(v_worldNormal);
         vec3 ep = (p_viewMatrixInverse * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         vec3 edn = normalize(ep - v_worldPosition);
@@ -31,13 +36,16 @@ class BasicMaterial : Material {
                     is PointLight -> """
                 {
                     vec3 dp = p_lightPosition$index - v_worldPosition;
+                    float distance = length(dp);
+                    float attenuation = 1.0 / (p_lightConstantAttenuation$index +
+                    p_lightLinearAttenuation$index * distance + p_lightQuadraticAttenuation$index * distance * distance);
                     vec3 dpn = normalize(dp);
 
                     float side = dot(dpn, wnn);
-                    light += max(0, side) * p_lightColor$index.rgb * p_diffuse.rgb;
+                    light += attenuation * max(0, side) * p_lightColor$index.rgb * p_diffuse.rgb;
                     if (side > 0.0) {
                         float f = max(0.0, dot(reflect(-dpn, wnn), edn));
-                        light += pow(f, p_shininess) * p_lightColor$index.rgb * p_specular.rgb;
+                        light += attenuation * pow(f, p_shininess) * p_lightColor$index.rgb * p_specular.rgb;
                     }
                 }
             """.trimIndent()
@@ -46,11 +54,8 @@ class BasicMaterial : Material {
                     light += max(0, dot(wnn , p_lightDirection$index)) * p_lightColor$index.rgb * p_diffuse.rgb;
                 }
             """.trimIndent()
-
                     else -> TODO()
                 }
-
-
         }.joinToString("\n")
         }
         x_fill.rgb = light;
@@ -58,6 +63,7 @@ class BasicMaterial : Material {
     """.trimIndent()
 
         return shadeStyle {
+            this.vertexTransform = this@BasicMaterial.vertexTransform
             fragmentTransform = fs
         }
     }
@@ -66,6 +72,17 @@ class BasicMaterial : Material {
         shadeStyle.parameter("specular", specular)
         shadeStyle.parameter("diffuse", diffuse)
         shadeStyle.parameter("shininess", shininess)
+
+        parameters.forEach { k, v ->
+            when (v) {
+                is Double -> shadeStyle.parameter(k, v)
+                is Int -> shadeStyle.parameter(k, v)
+                is Vector2 -> shadeStyle.parameter(k, v)
+                is Vector3 -> shadeStyle.parameter(k, v)
+                is Vector4 -> shadeStyle.parameter(k, v)
+                else -> TODO("support ${v::class.java}")
+            }
+        }
 
         val lights = context.lights
         lights.forEachIndexed { index, (node, light) ->
@@ -76,6 +93,9 @@ class BasicMaterial : Material {
 
                 is PointLight -> {
                     shadeStyle.parameter("lightPosition$index", (node.worldTransform * Vector4.UNIT_W).xyz)
+                    shadeStyle.parameter("lightConstantAttenuation$index", light.constantAttenuation)
+                    shadeStyle.parameter("lightLinearAttenuation$index", light.linearAttenuation)
+                    shadeStyle.parameter("lightQuadraticAttenuation$index", light.quadraticAttenuation)
                 }
 
                 is DirectionalLight -> {
@@ -86,11 +106,11 @@ class BasicMaterial : Material {
     }
 }
 
-private inline fun <reified T : Material> Mesh.material(init: T.() -> Unit): T {
+private inline fun <reified T : Material> MeshBase.material(init: T.() -> Unit): T {
     val t: T = T::class.java.constructors[0].newInstance() as T
     t.init()
     material = t
     return t
 }
 
-fun Mesh.basicMaterial(init: BasicMaterial.() -> Unit): BasicMaterial = material(init)
+fun MeshBase.basicMaterial(init: BasicMaterial.() -> Unit): BasicMaterial = material(init)

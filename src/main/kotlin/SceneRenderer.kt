@@ -7,8 +7,11 @@ class SceneRenderer {
 
     fun draw(drawer: Drawer, scene: Scene, camera: Camera) {
         // -- call all draw() functions
-        scene.root.visit {
-            draw?.invoke()
+//        scene.root.visit {
+//            draw?.invoke()
+//        }
+        scene.drawFunctions.forEach {
+            it()
         }
 
         // update all the transforms
@@ -19,6 +22,7 @@ class SceneRenderer {
 
         val lights = scene.root.findContent { this as? Light }
         val meshes = scene.root.findContent { this as? Mesh }
+        val instancedMeshes = scene.root.findContent { this as? InstancedMesh }
 
         val materialContext = MaterialContext(lights)
 
@@ -30,7 +34,27 @@ class SceneRenderer {
                 mesh.material.applyToShadeStyle(materialContext, shadeStyle)
                 drawer.shadeStyle = shadeStyle
                 drawer.model = it.node.worldTransform
-                drawer.vertexBuffer(mesh.geometry.vertexBuffers, DrawPrimitive.TRIANGLES)
+                drawer.vertexBuffer(mesh.geometry.vertexBuffers,
+                        DrawPrimitive.TRIANGLES,
+                        mesh.geometry.offset,
+                        mesh.geometry.vertexCount)
+            }
+        }
+
+        instancedMeshes.forEach {
+            val mesh = it.content
+            drawer.isolated {
+                val shadeStyle = mesh.material.generateShadeStyle(materialContext)
+                shadeStyle.parameter("viewMatrixInverse", drawer.view.inversed)
+                mesh.material.applyToShadeStyle(materialContext, shadeStyle)
+                drawer.shadeStyle = shadeStyle
+                drawer.model = it.node.worldTransform
+                drawer.vertexBufferInstances(mesh.geometry.vertexBuffers,
+                        mesh.attributes,
+                        DrawPrimitive.TRIANGLES,
+                        mesh.instances,
+                        mesh.geometry.offset,
+                        mesh.geometry.vertexCount)
             }
         }
     }

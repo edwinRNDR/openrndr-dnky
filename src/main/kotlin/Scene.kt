@@ -2,8 +2,8 @@ package org.openrndr.dnky
 
 import org.openrndr.math.Matrix44
 
-class Scene(val root: SceneNode = SceneNode())
-
+class Scene(val root: SceneNode = SceneNode(),
+            val drawFunctions: MutableList<() -> Unit> = mutableListOf())
 
 class NodeContent<T : Entity>(val node: SceneNode, val content: T) {
     operator fun component1() = node
@@ -15,7 +15,6 @@ open class SceneNode(var entities: MutableList<Entity> = mutableListOf()) {
     var transform = Matrix44.IDENTITY
     var worldTransform = Matrix44.IDENTITY
     val children = mutableListOf<SceneNode>()
-    var draw: (() -> Unit)? = null
 }
 
 fun SceneNode.visit(visitor: SceneNode.() -> Unit) {
@@ -36,7 +35,7 @@ fun SceneNode.findNodes(selector: SceneNode.() -> Boolean): List<SceneNode> {
     return result
 }
 
-fun <P:Entity> SceneNode.findContent(selector: Entity.() -> P?): List<NodeContent<P>> {
+fun <P : Entity> SceneNode.findContent(selector: Entity.() -> P?): List<NodeContent<P>> {
     val result = mutableListOf<NodeContent<P>>()
 
     visit {
@@ -56,6 +55,10 @@ fun scene(init: Scene.() -> Unit): Scene {
     return scene
 }
 
+fun Scene.draw(drawFunction: () -> Unit) {
+    drawFunctions.add(drawFunction)
+}
+
 fun Scene.node(init: SceneNode.() -> Unit): SceneNode {
     val node = SceneNode()
     node.init()
@@ -72,9 +75,9 @@ fun SceneNode.node(init: SceneNode.() -> Unit): SceneNode {
     return node
 }
 
-fun SceneNode.draw(call: () -> Unit) {
-    draw = call
-}
+//fun SceneNode.draw(call: () -> Unit) {
+//    draw = call
+//}
 
 fun SceneNode.mesh(geometry: Geometry, material: Material, init: Mesh.() -> Unit = {}): Mesh {
     val mesh = Mesh(geometry, material).apply(init)
@@ -88,6 +91,13 @@ fun SceneNode.mesh(init: Mesh.() -> Unit): Mesh {
     mesh.init()
     entities.add(mesh)
     return mesh
+}
+
+fun SceneNode.instancedMesh(init: InstancedMesh.() -> Unit): InstancedMesh {
+    val instanced = InstancedMesh(DummyGeometry, DefaultMaterial, 1, mutableListOf())
+    instanced.init()
+    entities.add(instanced)
+    return instanced
 }
 
 

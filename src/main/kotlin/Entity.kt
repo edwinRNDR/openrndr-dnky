@@ -40,14 +40,18 @@ fun geometry(init: GeometryBuilder.() -> Unit): Geometry {
     return builder()
 }
 
-class Mesh(var geometry: Geometry, var material: Material) : Entity()
-
+abstract class MeshBase(var geometry: Geometry, var material: Material) : Entity()
+class Mesh(geometry: Geometry, material: Material) : MeshBase(geometry, material)
+class InstancedMesh(geometry: Geometry, material: Material, var instances: Int, var attributes: List<VertexBuffer>) : MeshBase(geometry, material)
 
 /** Light entity */
 abstract class Light : Entity() {
     var color: ColorRGBa = ColorRGBa.WHITE
 }
 
-class PointLight : Light()
+class PointLight(var constantAttenuation: Double = 1.0,
+                 var linearAttenuation: Double = 0.0,
+                 var quadraticAttenuation: Double = 0.0) : Light()
+
 class AmbientLight : Light()
 class DirectionalLight(var direction: Vector3 = Vector3.UNIT_Z) : Light()
