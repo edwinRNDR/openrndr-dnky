@@ -3,6 +3,7 @@ package org.openrndr.dnky
 import org.openrndr.draw.*
 import org.openrndr.math.Matrix44
 import org.openrndr.math.Vector4
+import org.openrndr.math.transforms.normalMatrix
 
 class SceneRenderer {
 
@@ -32,26 +33,29 @@ class SceneRenderer {
 }
 
 private fun shadeStyle(lights: List<SceneNode>): ShadeStyle {
-
     val fs = """
         vec3 light = vec3(0.0);
+        vec3 wnn = normalize(v_worldNormal);
         ${lights.mapIndexed { index, node ->
         when (node.entity) {
             is AmbientLight -> "light += p_lightColor$index.rgb;"
-            is PointLight -> """{
-
+            is PointLight -> """
+                {
                 vec3 dp = p_lightPosition$index - v_worldPosition;
                 vec3 dpn = normalize(dp);
-
-
-                    light += dot(dpn, normalize(v_worldNormal)) * p_lightColor$index.rgb;
+                light += max(0, dot(dpn, wnn)) * p_lightColor$index.rgb;
                 }
-
             """.trimIndent()
+            is DirectionalLight -> """
+                {
+                light += max(0, dot(wnn , p_lightDirection$index)) * p_lightColor$index.rgb;
+                }
+            """.trimIndent()
+
             else -> TODO()
         }
 
-    }.joinToString()
+    }.joinToString("\n")
     }
         x_fill.rgb = light;
         x_fill.a = 1.0;
@@ -61,14 +65,17 @@ private fun shadeStyle(lights: List<SceneNode>): ShadeStyle {
         fragmentTransform = fs
         lights.forEachIndexed { index, node ->
             parameter("lightColor$index", (node.entity as Light).color)
-            when (node.entity) {
-
+            when (val light = node.entity as Light) {
                 is AmbientLight -> {
 
                 }
 
                 is PointLight -> {
                     parameter("lightPosition$index", (node.worldTransform * Vector4.UNIT_W).xyz)
+                }
+
+                is DirectionalLight -> {
+                    parameter("lightDirection$index", ((normalMatrix(node.worldTransform)) * light.direction).normalized)
                 }
             }
         }

@@ -5,7 +5,7 @@ import org.openrndr.math.Matrix44
 class Scene(val root: SceneNode = SceneNode())
 
 open class SceneNode(var entity: Entity? = null) {
-    var parent : SceneNode? = null
+    var parent: SceneNode? = null
     var transform = Matrix44.IDENTITY
     var worldTransform = Matrix44.IDENTITY
     val children = mutableListOf<SceneNode>()
@@ -22,7 +22,7 @@ fun <P> SceneNode.scan(initial: P, scanner: SceneNode.(P) -> P) {
     children.forEach { it.scan(p, scanner) }
 }
 
-fun SceneNode.findNodes(selector: SceneNode.()->Boolean) : List<SceneNode> {
+fun SceneNode.findNodes(selector: SceneNode.() -> Boolean): List<SceneNode> {
     val result = mutableListOf<SceneNode>()
     visit {
         if (selector()) result.add(this)
@@ -30,7 +30,7 @@ fun SceneNode.findNodes(selector: SceneNode.()->Boolean) : List<SceneNode> {
     return result
 }
 
-fun <P> SceneNode.findContent(selector: SceneNode.()->P?) : List<P> {
+fun <P> SceneNode.findContent(selector: SceneNode.() -> P?): List<P> {
     val result = mutableListOf<P>()
 
     visit {
@@ -68,18 +68,28 @@ fun SceneNode.draw(call: () -> Unit) {
     draw = call
 }
 
-
 fun SceneNode.mesh(geometry: Geometry, material: Material, init: Mesh.() -> Unit = {}): Mesh {
     val mesh = Mesh(geometry, material).apply(init)
     entity = mesh
     return mesh
 }
 
-
 fun SceneNode.pointLight(init: PointLight.() -> Unit): PointLight {
     val pointLight = PointLight().apply(init)
     entity = pointLight
     return pointLight
+}
+
+fun SceneNode.directionalLight(init: DirectionalLight.() -> Unit): DirectionalLight {
+    val directionalLight = DirectionalLight().apply(init)
+    entity = directionalLight
+    return directionalLight
+}
+
+fun SceneNode.ambientLight(init: AmbientLight.() -> Unit): AmbientLight {
+    val ambientLight = AmbientLight().apply(init)
+    entity = ambientLight
+    return ambientLight
 }
 
 private fun sample() {
