@@ -2,8 +2,6 @@ package org.openrndr.dnky
 
 import org.openrndr.draw.*
 import org.openrndr.math.Matrix44
-import org.openrndr.math.Vector4
-import org.openrndr.math.transforms.normalMatrix
 
 class SceneRenderer {
 
@@ -22,9 +20,14 @@ class SceneRenderer {
         val lights = scene.root.findNodes { entity is Light }
         val meshes = scene.root.findNodes { entity is Mesh }
 
+        val materialContext = MaterialContext(lights)
+
         meshes.forEach {
+            val mesh = it.entity as Mesh
             drawer.isolated {
-                drawer.shadeStyle = shadeStyle(lights)
+                val shadeStyle = mesh.material.generateShadeStyle(materialContext)
+                mesh.material.applyToShadeStyle(materialContext, shadeStyle)
+                drawer.shadeStyle = shadeStyle
                 drawer.model = it.worldTransform
                 drawer.vertexBuffer((it.entity as Mesh).geometry.vertexBuffers, DrawPrimitive.TRIANGLES)
             }
@@ -32,52 +35,3 @@ class SceneRenderer {
     }
 }
 
-private fun shadeStyle(lights: List<SceneNode>): ShadeStyle {
-    val fs = """
-        vec3 light = vec3(0.0);
-        vec3 wnn = normalize(v_worldNormal);
-        ${lights.mapIndexed { index, node ->
-        when (node.entity) {
-            is AmbientLight -> "light += p_lightColor$index.rgb;"
-            is PointLight -> """
-                {
-                vec3 dp = p_lightPosition$index - v_worldPosition;
-                vec3 dpn = normalize(dp);
-                light += max(0, dot(dpn, wnn)) * p_lightColor$index.rgb;
-                }
-            """.trimIndent()
-            is DirectionalLight -> """
-                {
-                light += max(0, dot(wnn , p_lightDirection$index)) * p_lightColor$index.rgb;
-                }
-            """.trimIndent()
-
-            else -> TODO()
-        }
-
-    }.joinToString("\n")
-    }
-        x_fill.rgb = light;
-        x_fill.a = 1.0;
-    """.trimIndent()
-
-    return shadeStyle {
-        fragmentTransform = fs
-        lights.forEachIndexed { index, node ->
-            parameter("lightColor$index", (node.entity as Light).color)
-            when (val light = node.entity as Light) {
-                is AmbientLight -> {
-
-                }
-
-                is PointLight -> {
-                    parameter("lightPosition$index", (node.worldTransform * Vector4.UNIT_W).xyz)
-                }
-
-                is DirectionalLight -> {
-                    parameter("lightDirection$index", ((normalMatrix(node.worldTransform)) * light.direction).normalized)
-                }
-            }
-        }
-    }
-}

@@ -14,6 +14,8 @@ class Geometry(val vertexBuffers: List<VertexBuffer>,
                val offset: Int,
                val vertexCount: Int)
 
+val DummyGeometry = Geometry(emptyList(), null, DrawPrimitive.TRIANGLES, 0, 0)
+
 class GeometryBuilder {
     var vertexBuffers = mutableListOf<VertexBuffer>()
     var indexBuffer: IndexBuffer? = null
@@ -39,6 +41,7 @@ fun geometry(init: GeometryBuilder.() -> Unit): Geometry {
 }
 
 class Mesh(var geometry: Geometry, var material: Material) : Entity()
+
 
 /** Light entity */
 abstract class Light : Entity() {

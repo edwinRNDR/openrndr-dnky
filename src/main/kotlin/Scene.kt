@@ -74,6 +74,15 @@ fun SceneNode.mesh(geometry: Geometry, material: Material, init: Mesh.() -> Unit
     return mesh
 }
 
+private val DefaultMaterial = BasicMaterial()
+fun SceneNode.mesh(init: Mesh.() -> Unit) : Mesh {
+    val mesh = Mesh(DummyGeometry, DefaultMaterial)
+    mesh.init()
+    entity = mesh
+    return mesh
+}
+
+
 fun SceneNode.pointLight(init: PointLight.() -> Unit): PointLight {
     val pointLight = PointLight().apply(init)
     entity = pointLight
