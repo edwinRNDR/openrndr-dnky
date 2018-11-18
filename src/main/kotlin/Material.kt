@@ -62,7 +62,8 @@ class BasicMaterial : Material {
                     is HemisphereLight -> """
                 {
                     float f = dot(wnn, p_lightDirection$index) * 0.5 + 0.5;
-                    light += mix(p_lightDownColor$index.rgb, p_lightUpColor$index.rgb, f);
+                    vec3 irr = ${ light.irradianceMap?.let { "texture(p_lightIrradianceMap$index, wnn).rgb" } ?: "vec3(1.0)" };
+                    light += mix(p_lightDownColor$index.rgb, p_lightUpColor$index.rgb, f) * irr;
                 }
             """.trimIndent()
                     else -> TODO()
@@ -88,6 +89,8 @@ class BasicMaterial : Material {
     }
 
     override fun applyToShadeStyle(context: MaterialContext, shadeStyle: ShadeStyle) {
+
+        var textureIndex = 0
         shadeStyle.parameter("specular", specular)
         shadeStyle.parameter("diffuse", diffuse)
         shadeStyle.parameter("shininess", shininess)
@@ -125,6 +128,10 @@ class BasicMaterial : Material {
                     shadeStyle.parameter("lightDirection$index", ((normalMatrix(node.worldTransform)) * light.direction).normalized)
                     shadeStyle.parameter("lightUpColor$index", light.upColor)
                     shadeStyle.parameter("lightDownColor$index", light.downColor)
+
+                    light.irradianceMap?.let {
+                        shadeStyle.parameter("lightIrradianceMap$index", it)
+                    }
                 }
             }
         }

@@ -1,6 +1,7 @@
 package org.openrndr.dnky
 
 import org.openrndr.color.ColorRGBa
+import org.openrndr.draw.Cubemap
 import org.openrndr.draw.DrawPrimitive
 import org.openrndr.draw.IndexBuffer
 import org.openrndr.draw.VertexBuffer
@@ -65,4 +66,6 @@ class AmbientLight : Light()
 class DirectionalLight(var direction: Vector3 = Vector3.UNIT_Z) : Light()
 class HemisphereLight(var direction: Vector3 = Vector3.UNIT_Y,
                       var upColor: ColorRGBa = ColorRGBa.WHITE,
-                      var downColor: ColorRGBa = ColorRGBa.BLACK) : Light()
+                      var downColor: ColorRGBa = ColorRGBa.BLACK) : Light() {
+    var irradianceMap: Cubemap? = null
+}
