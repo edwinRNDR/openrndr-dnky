@@ -3,6 +3,37 @@ package org.openrndr.dnky
 import org.openrndr.draw.*
 import org.openrndr.math.Matrix44
 
+abstract class RenderFacet(val targetOutput: String, val format: ColorFormat, val type: ColorType) {
+    abstract fun generateShader(): String
+}
+
+class PositionFacet : RenderFacet("position", ColorFormat.RGB, ColorType.FLOAT16) {
+    override fun generateShader(): String = "o_$targetOutput.rgb = v_worldPosition.rgb;"
+}
+
+class NormalFacet : RenderFacet("normal", ColorFormat.RGB, ColorType.FLOAT16) {
+    override fun generateShader() = "o_$targetOutput.rgb = v_worldNormal.rgb;"
+}
+
+class LDRColorFacet : RenderFacet("color", ColorFormat.RGBa, ColorType.UINT8) {
+    override fun generateShader() = "o_$targetOutput.rgb = f_diffuse.rgb + f_specular.rgb;"
+}
+
+
+class RenderPass(val facets: List<RenderFacet>)
+
+val DefaultPass = RenderPass(listOf(LDRColorFacet()))
+val LightPass = RenderPass(listOf(PositionFacet()))
+
+fun createPassTarget(pass: RenderPass, width: Int, height: Int) {
+    val rt = renderTarget(width, height) {
+        for (facet in pass.facets) {
+            colorBuffer(facet.targetOutput, facet.format, facet.type)
+        }
+        depthBuffer()
+    }
+}
+
 class SceneRenderer {
 
     fun draw(drawer: Drawer, scene: Scene, camera: Camera) {
@@ -22,7 +53,8 @@ class SceneRenderer {
         val instancedMeshes = scene.root.findContent { this as? InstancedMesh }
 
 
-        val materialContext = MaterialContext(lights, fogs)
+        val pass = DefaultPass
+        val materialContext = MaterialContext(pass, lights, fogs)
 
         meshes.forEach {
             val mesh = it.content
