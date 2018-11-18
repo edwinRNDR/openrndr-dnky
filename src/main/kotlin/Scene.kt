@@ -114,6 +114,12 @@ fun SceneNode.ambientLight(init: AmbientLight.() -> Unit): AmbientLight {
     return ambientLight
 }
 
+fun SceneNode.hemisphereLight(init: HemisphereLight. () -> Unit) : HemisphereLight {
+    val hemisphereLight = HemisphereLight().apply(init)
+    entities.add(hemisphereLight)
+    return hemisphereLight
+}
+
 fun SceneNode.fog(init:Fog.() -> Unit) : Fog {
     val fog = Fog().apply(init)
     entities.add(fog)

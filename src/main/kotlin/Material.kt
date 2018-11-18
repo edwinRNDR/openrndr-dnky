@@ -57,8 +57,12 @@ class BasicMaterial : Material {
                         float f = max(0.0, dot(reflect(p_lightDirection$index, wnn), edn));
                         light += pow(f, p_shininess) * p_lightColor$index.rgb * p_specular.rgb;
                     }
-
-
+                }
+            """.trimIndent()
+                    is HemisphereLight -> """
+                {
+                    float f = dot(wnn, p_lightDirection$index) * 0.5 + 0.5;
+                    light += mix(p_lightDownColor$index.rgb, p_lightUpColor$index.rgb, f);
                 }
             """.trimIndent()
                     else -> TODO()
@@ -115,6 +119,12 @@ class BasicMaterial : Material {
 
                 is DirectionalLight -> {
                     shadeStyle.parameter("lightDirection$index", ((normalMatrix(node.worldTransform)) * light.direction).normalized)
+                }
+
+                is HemisphereLight -> {
+                    shadeStyle.parameter("lightDirection$index", ((normalMatrix(node.worldTransform)) * light.direction).normalized)
+                    shadeStyle.parameter("lightUpColor$index", light.upColor)
+                    shadeStyle.parameter("lightDownColor$index", light.downColor)
                 }
             }
         }
