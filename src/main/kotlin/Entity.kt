@@ -1,11 +1,12 @@
 package org.openrndr.dnky
 
 import org.openrndr.color.ColorRGBa
-import org.openrndr.draw.Cubemap
-import org.openrndr.draw.DrawPrimitive
-import org.openrndr.draw.IndexBuffer
-import org.openrndr.draw.VertexBuffer
+import org.openrndr.draw.*
+import org.openrndr.math.Matrix44
 import org.openrndr.math.Vector3
+import org.openrndr.math.Vector4
+import org.openrndr.math.transforms.perspective
+import org.openrndr.math.transforms.transform
 
 sealed class Entity
 
@@ -63,7 +64,42 @@ class PointLight(var constantAttenuation: Double = 1.0,
                  var quadraticAttenuation: Double = 0.0) : Light()
 
 class AmbientLight : Light()
-class DirectionalLight(var direction: Vector3 = Vector3.UNIT_Z) : Light()
+interface ShadowLight {
+    var shadows: Boolean
+    fun projection(renderTarget: RenderTarget): Matrix44
+    fun view(node: SceneNode): Matrix44
+}
+
+class DirectionalLight(var direction: Vector3 = Vector3.UNIT_Z, override var shadows: Boolean = false) : Light(), ShadowLight {
+    override fun projection(renderTarget: RenderTarget): Matrix44 {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    }
+
+    override fun view(node: SceneNode): Matrix44 {
+        TODO("not implemented")
+    }
+}
+
+class SpotLight(var direction: Vector3 = Vector3.UNIT_Z, var innerAngle: Double = 45.0, var outerAngle: Double = 90.0) : Light(), ShadowLight {
+    var constantAttenuation = 1.0
+    var linearAttenuation = 0.0
+    var quadraticAttenuation = 0.0
+    override var shadows: Boolean = false
+    override fun projection(renderTarget: RenderTarget): Matrix44 {
+        return perspective(outerAngle * 2.0, renderTarget.width * 1.0 / renderTarget.height, 1.0, 150.0)
+    }
+
+    override fun view(node: SceneNode): Matrix44 {
+        val position = node.worldTransform * Vector4.UNIT_W
+        val rotation = Matrix44.fromColumnVectors(node.worldTransform[0], node.worldTransform[1], node.worldTransform[2] * -1.0, Vector4.UNIT_W).inversed
+
+        return transform {
+            multiply(rotation)
+            translate(-position.xyz)
+        }
+    }
+}
+
 class HemisphereLight(var direction: Vector3 = Vector3.UNIT_Y,
                       var upColor: ColorRGBa = ColorRGBa.WHITE,
                       var downColor: ColorRGBa = ColorRGBa.BLACK) : Light() {

@@ -5,12 +5,17 @@ import org.openrndr.draw.ColorBuffer
 import org.openrndr.draw.RenderTarget
 import org.openrndr.draw.ShadeStyle
 import org.openrndr.draw.shadeStyle
+import org.openrndr.math.Matrix44
 import org.openrndr.math.Vector2
 import org.openrndr.math.Vector3
 import org.openrndr.math.Vector4
+import org.openrndr.math.transforms.lookAt
 import org.openrndr.math.transforms.normalMatrix
 
-data class MaterialContext(val pass: RenderPass, val lights: List<NodeContent<Light>>, val fogs: List<NodeContent<Fog>>)
+data class MaterialContext(val pass: RenderPass,
+                           val lights: List<NodeContent<Light>>,
+                           val fogs: List<NodeContent<Fog>>,
+                           val shadowMaps: Map<ShadowLight, RenderTarget>)
 
 interface Material {
     fun generateShadeStyle(context: MaterialContext): ShadeStyle
@@ -55,6 +60,38 @@ private fun HemisphereLight.fs(index: Int): String = """
 |}
 """.trimMargin()
 
+private fun SpotLight.fs(index: Int): String = """
+|{
+|   vec3 dp = p_lightPosition$index - v_worldPosition;
+|   float distance = length(dp);
+|   float attenuation = 1.0 / (p_lightConstantAttenuation$index +
+|   p_lightLinearAttenuation$index * distance + p_lightQuadraticAttenuation$index * distance * distance);
+|   attenuation = 1.0;
+|   vec3 dpn = normalize(dp);
+|
+|   float side = dot(dpn, wnn);
+|   float hit = max(dot(-dpn, p_lightDirection$index), 0.0);
+|   float falloff = clamp((hit - p_lightOuterCos$index) / (p_lightInnerCos$index - p_lightOuterCos$index), 0.0, 1.0);
+|   attenuation *= falloff;
+|   ${if (shadows) """
+    |vec4 smc = (p_lightTransform$index * vec4(v_worldPosition,1.0));
+    |vec3 lightProj = (smc.xyz/smc.w) * 0.5 + 0.5;
+    |if (lightProj.x > 0.0 && lightProj.x < 1.0 && lightProj.y > 0 && lightProj.y < 1) {
+    |   vec3 smz = texture(p_lightShadowMap$index, lightProj.xy).rgb;
+    |   float currentDepth = lightProj.z;
+    |   float closestDepth = smz.x;
+    |   float shadow = (currentDepth - 0.005)  > closestDepth  ? 0.0 : 1.0;
+    |   attenuation *= shadow;
+    |}
+""".trimMargin() else "" }
+|   f_diffuse += attenuation * max(0, side) * p_lightColor$index.rgb * p_diffuse.rgb;
+|   if (side > 0.0) {
+|       float f = max(0.0, dot(reflect(-dpn, wnn), edn));
+|       f_specular += attenuation * pow(f, m_shininess) * p_lightColor$index.rgb * m_specular.rgb;
+|   }
+}
+""".trimMargin()
+
 private fun Fog.fs(index: Int): String = """
 |{
 |    float dz = min(1.0, -v_viewPosition.z/p_fogEnd$index);
@@ -63,11 +100,16 @@ private fun Fog.fs(index: Int): String = """
 |}
 """.trimMargin()
 
-sealed class TextureFetcher
-object DummyFetcher : TextureFetcher()
-abstract class TextureFromColorBuffer(val texture: ColorBuffer) : TextureFetcher()
-class ModelCoordinates(val input: String = "v_texCoord0.xy", texture: ColorBuffer) : TextureFromColorBuffer(texture)
-class Triplanar(texture: ColorBuffer, var scale: Double = 1.0, var sharpness: Double = 2.0 ) : TextureFromColorBuffer(texture)
+sealed class TextureSource
+object DummySource : TextureSource()
+abstract class TextureFromColorBuffer(val texture: ColorBuffer) : TextureSource()
+
+class ModelCoordinates(texture: ColorBuffer,
+                       val input: String = "v_texCoord0.xy") : TextureFromColorBuffer(texture)
+
+class Triplanar(texture: ColorBuffer,
+                var scale: Double = 1.0,
+                var sharpness: Double = 2.0) : TextureFromColorBuffer(texture)
 
 private fun ModelCoordinates.fs(index: Int) = "vec4 tex$index = texture(p_texture$index ,$input);"
 private fun Triplanar.fs(index: Int) = """
@@ -94,7 +136,7 @@ enum class TextureTarget {
     SHININESS,
 }
 
-class Texture(var fetch: TextureFetcher,
+class Texture(var fetch: TextureSource,
               var target: TextureTarget)
 
 
@@ -120,7 +162,7 @@ class BasicMaterial : Material {
         val textureFs = if (needLight) {
             (textures.mapIndexed { index, it ->
                 when (val fetch = it.fetch) {
-                    DummyFetcher -> "vec4 tex$index = vec4(1.0);"
+                    DummySource -> "vec4 tex$index = vec4(1.0);"
                     is ModelCoordinates -> fetch.fs(index)
                     is Triplanar -> fetch.fs(index)
                     else -> TODO()
@@ -149,6 +191,7 @@ class BasicMaterial : Material {
             when (light) {
                 is AmbientLight -> light.fs(index)
                 is PointLight -> light.fs(index)
+                is SpotLight -> light.fs(index)
                 is DirectionalLight -> light.fs(index)
                 is HemisphereLight -> light.fs(index)
                 else -> TODO()
@@ -178,14 +221,17 @@ class BasicMaterial : Material {
             this.vertexTransform = this@BasicMaterial.vertexTransform
             fragmentTransform = fs
             context.pass.combiners.map {
-                this.output(it.targetOutput, rt.colorBufferIndex(it.targetOutput))
+                if (rt.colorBuffers.size <= 1) {
+                    this.output(it.targetOutput, 0)
+                } else
+                    this.output(it.targetOutput, rt.colorBufferIndex(it.targetOutput))
             }
         }
     }
 
     private fun needLight(context: MaterialContext): Boolean {
         val needSpecular = context.pass.combiners.any { FacetType.SPECULAR in it.facets }
-        val needDiffuse = context.pass.combiners.any { FacetType.SPECULAR in it.facets }
+        val needDiffuse = context.pass.combiners.any { FacetType.DIFFUSE in it.facets }
         val needLight = needSpecular || needDiffuse
         return needLight
     }
@@ -233,6 +279,25 @@ class BasicMaterial : Material {
                         shadeStyle.parameter("lightQuadraticAttenuation$index", light.quadraticAttenuation)
                     }
 
+                    is SpotLight -> {
+                        shadeStyle.parameter("lightPosition$index", (node.worldTransform * Vector4.UNIT_W).xyz)
+                        shadeStyle.parameter("lightDirection$index", ((normalMatrix(node.worldTransform)) * light.direction).normalized)
+                        shadeStyle.parameter("lightConstantAttenuation$index", light.constantAttenuation)
+                        shadeStyle.parameter("lightLinearAttenuation$index", light.linearAttenuation)
+                        shadeStyle.parameter("lightQuadraticAttenuation$index", light.quadraticAttenuation)
+                        shadeStyle.parameter("lightInnerCos$index", Math.cos(Math.toRadians(light.innerAngle)))
+                        shadeStyle.parameter("lightOuterCos$index", Math.cos(Math.toRadians(light.outerAngle)))
+
+                        if (light.shadows) {
+                            context.shadowMaps[light]?.let {
+                                val look = light.view(node)
+                                shadeStyle.parameter("lightTransform$index",
+                                        light.projection(it) * look )
+                                shadeStyle.parameter("lightShadowMap$index", it.depthBuffer?:TODO())
+                            }
+                        }
+                    }
+
                     is DirectionalLight -> {
                         shadeStyle.parameter("lightDirection$index", ((normalMatrix(node.worldTransform)) * light.direction).normalized)
                     }
@@ -254,7 +319,6 @@ class BasicMaterial : Material {
             }
         }
     }
-
 }
 
 private inline fun <reified T : Material> MeshBase.material(init: T.() -> Unit): T {
@@ -265,7 +329,7 @@ private inline fun <reified T : Material> MeshBase.material(init: T.() -> Unit):
 }
 
 fun BasicMaterial.texture(init: Texture.() -> Unit): Texture {
-    val texture = Texture(DummyFetcher, target = TextureTarget.DIFFUSE)
+    val texture = Texture(DummySource, target = TextureTarget.DIFFUSE)
     texture.init()
     textures.add(texture)
     return texture

@@ -102,6 +102,12 @@ fun SceneNode.pointLight(init: PointLight.() -> Unit): PointLight {
     return pointLight
 }
 
+fun SceneNode.spotLight(init: SpotLight.() -> Unit): SpotLight {
+    val spotLight = SpotLight().apply(init)
+    entities.add(spotLight)
+    return spotLight
+}
+
 fun SceneNode.directionalLight(init: DirectionalLight.() -> Unit): DirectionalLight {
     val directionalLight = DirectionalLight().apply(init)
     entities.add(directionalLight)
