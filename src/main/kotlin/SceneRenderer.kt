@@ -137,6 +137,14 @@ class SceneRenderer {
             val pass = DefaultPass
             val materialContext = MaterialContext(pass, lights, fogs, shadowLightTargets, meshCubemaps)
             drawPass(drawer, materialContext, meshes, instancedMeshes)
+            val drawNodes = scene.root.findNodes { drawFunction != null }
+
+            drawNodes.forEach {
+                drawer.isolated {
+                    drawer.model = it.worldTransform
+                    it.drawFunction?.invoke(drawer)
+                }
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 package org.openrndr.dnky
 
+import org.openrndr.draw.Drawer
 import org.openrndr.math.Matrix44
 
 class Scene(val root: SceneNode = SceneNode(),
@@ -15,6 +16,7 @@ open class SceneNode(var entities: MutableList<Entity> = mutableListOf()) {
     var transform = Matrix44.IDENTITY
     var worldTransform = Matrix44.IDENTITY
     val children = mutableListOf<SceneNode>()
+    var drawFunction: (Drawer.() -> Unit)? = null
 }
 
 fun SceneNode.visit(visitor: SceneNode.() -> Unit) {
@@ -73,6 +75,10 @@ fun SceneNode.node(init: SceneNode.() -> Unit): SceneNode {
     children.add(node)
     node.parent = this
     return node
+}
+
+fun SceneNode.draw(draw: Drawer.() -> Unit) {
+    drawFunction = draw
 }
 
 fun SceneNode.mesh(geometry: Geometry, material: Material, init: Mesh.() -> Unit = {}): Mesh {

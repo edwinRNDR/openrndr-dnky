@@ -126,9 +126,9 @@ private fun Triplanar.fs(index: Int, target: TextureTarget) = """
 |   weights = weights / (weights.x + weights.y + weights.z);
 |   tex$index = tX * weights.x + tY * weights.y + weights.z * tZ;
 |   ${if(target == TextureTarget.NORMAL) """
-    |   vec3 tnX = normalize( (tX.xyz - vec3(0.5, 0.5, -0.1))*vec3(0.1,0.1,1.0));
-    |   vec3 tnY = normalize( (tY.xyz - vec3(0.5, 0.5, -0.1))*vec3(0.1,0.1,1.0) );
-    |   vec3 tnZ = normalize( (tZ.xyz - vec3(0.5, 0.5, -0.1))*vec3(0.1,0.1,1.0) );
+    |   vec3 tnX = normalize( tX.xyz - vec3(0.5, 0.5, 0.0));
+    |   vec3 tnY = normalize( tY.xyz - vec3(0.5, 0.5, 0.0));
+    |   vec3 tnZ = normalize( tZ.xyz - vec3(0.5, 0.5, 0.0));
     |   vec3 nX = vec3(0.0, tnX.yx);
     |   vec3 nY = vec3(tnY.x, 0.0, tnY.y);
     |   vec3 nZ = vec3(tnZ.xy, 0.0);
