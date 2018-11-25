@@ -1,25 +1,22 @@
 package org.openrndr.dnky
 
 import org.openrndr.color.ColorRGBa
-import org.openrndr.draw.ColorBuffer
-import org.openrndr.draw.RenderTarget
-import org.openrndr.draw.ShadeStyle
-import org.openrndr.draw.shadeStyle
-import org.openrndr.math.Matrix44
+import org.openrndr.draw.*
 import org.openrndr.math.Vector2
 import org.openrndr.math.Vector3
 import org.openrndr.math.Vector4
-import org.openrndr.math.transforms.lookAt
 import org.openrndr.math.transforms.normalMatrix
 
 data class MaterialContext(val pass: RenderPass,
                            val lights: List<NodeContent<Light>>,
                            val fogs: List<NodeContent<Fog>>,
-                           val shadowMaps: Map<ShadowLight, RenderTarget>)
+                           val shadowMaps: Map<ShadowLight, RenderTarget>,
+                           val meshCubemaps: Map<Mesh, Cubemap>
+)
 
 interface Material {
     fun generateShadeStyle(context: MaterialContext): ShadeStyle
-    fun applyToShadeStyle(context: MaterialContext, shadeStyle: ShadeStyle)
+    fun applyToShadeStyle(context: MaterialContext, shadeStyle: ShadeStyle, entity: Entity)
 }
 
 private fun PointLight.fs(index: Int): String = """
@@ -56,7 +53,7 @@ private fun HemisphereLight.fs(index: Int): String = """
 |{
 |   float f = dot(wnn, p_lightDirection$index) * 0.5 + 0.5;
 |   vec3 irr = ${irradianceMap?.let { "texture(p_lightIrradianceMap$index, wnn).rgb" } ?: "vec3(1.0)"};
-|   f_diffuse += mix(p_lightDownColor$index.rgb, p_lightUpColor$index.rgb, f) * irr;
+|   f_diffuse += mix(p_lightDownColor$index.rgb, p_lightUpColor$index.rgb, f) * irr * m_diffuse.rgb;
 |}
 """.trimMargin()
 
@@ -82,8 +79,9 @@ private fun SpotLight.fs(index: Int): String = """
     |   float closestDepth = smz.x;
     |   float shadow = (currentDepth - 0.005)  > closestDepth  ? 0.0 : 1.0;
     |   attenuation *= shadow;
+    |
     |}
-""".trimMargin() else "" }
+""".trimMargin() else ""}
 |   f_diffuse += attenuation * max(0, side) * p_lightColor$index.rgb * p_diffuse.rgb;
 |   if (side > 0.0) {
 |       float f = max(0.0, dot(reflect(-dpn, wnn), edn));
@@ -136,11 +134,12 @@ enum class TextureTarget {
     SHININESS,
 }
 
-class Texture(var fetch: TextureSource,
+class Texture(var source: TextureSource,
               var target: TextureTarget)
 
 
 class BasicMaterial : Material {
+    var environmentMap = false
     var diffuse = ColorRGBa.WHITE
     var specular = ColorRGBa.WHITE
     var shininess = 1.0
@@ -161,10 +160,10 @@ class BasicMaterial : Material {
 
         val textureFs = if (needLight) {
             (textures.mapIndexed { index, it ->
-                when (val fetch = it.fetch) {
+                when (val source = it.source) {
                     DummySource -> "vec4 tex$index = vec4(1.0);"
-                    is ModelCoordinates -> fetch.fs(index)
-                    is Triplanar -> fetch.fs(index)
+                    is ModelCoordinates -> source.fs(index)
+                    is Triplanar -> source.fs(index)
                     else -> TODO()
                 }
             } + textures.mapIndexed { index, texture ->
@@ -172,7 +171,7 @@ class BasicMaterial : Material {
                     TextureTarget.NONE -> ""
                     TextureTarget.DIFFUSE -> "m_diffuse.rgb *= tex$index.rgb;"
                     TextureTarget.DIFFUSE_SPECULAR -> "m_diffuse.rgb *= tex$index.rgb; m_specular.rgb *= tex$index.rgb;"
-                    TextureTarget.SPECULAR -> "m_diffuse.rgb *= tex$index.rgb;"
+                    TextureTarget.SPECULAR -> "m_specular.rgb *= tex$index.rgb;"
                     TextureTarget.NORMAL -> TODO()
                     TextureTarget.SHININESS -> "m_shininess *= tex$index.r;"
                 }
@@ -186,6 +185,16 @@ class BasicMaterial : Material {
         vec3 wnn = normalize(v_worldNormal);
         vec3 ep = (p_viewMatrixInverse * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         vec3 edn = normalize(ep - v_worldPosition);
+
+        ${if(environmentMap && context.meshCubemaps.isNotEmpty()) """
+            float fresnelBias = 0.1;
+            float fresnelScale = 0.5;
+            float fresnelPower = 0.3;
+            float reflectivity = fresnelBias + fresnelScale * pow(1.0 + dot(-edn, v_worldNormal), fresnelPower);
+
+            f_specular.rgb += texture(p_environmentMap, reflect(-edn, normalize(v_worldNormal))).rgb * reflectivity;
+        """.trimIndent()  else ""  }
+
 
         ${lights.mapIndexed { index, (node, light) ->
             when (light) {
@@ -236,7 +245,17 @@ class BasicMaterial : Material {
         return needLight
     }
 
-    override fun applyToShadeStyle(context: MaterialContext, shadeStyle: ShadeStyle) {
+    override fun applyToShadeStyle(context: MaterialContext, shadeStyle: ShadeStyle, entity: Entity) {
+
+        if (entity is Mesh) {
+            if (environmentMap) {
+                context.meshCubemaps[entity]?.let {
+                    println("setting envmap to $it")
+                    shadeStyle.parameter("environmentMap", it)
+                }
+            }
+        }
+
         shadeStyle.parameter("specular", specular)
         shadeStyle.parameter("diffuse", diffuse)
         shadeStyle.parameter("shininess", shininess)
@@ -252,15 +271,14 @@ class BasicMaterial : Material {
             }
         }
         if (needLight(context)) {
-
             textures.forEachIndexed { index, texture ->
-                when (val fetch = texture.fetch) {
-                    is TextureFromColorBuffer -> shadeStyle.parameter("texture$index", fetch.texture)
+                when (val source = texture.source) {
+                    is TextureFromColorBuffer -> shadeStyle.parameter("texture$index", source.texture)
                 }
-                when (val fetch = texture.fetch) {
+                when (val source = texture.source) {
                     is Triplanar -> {
-                        shadeStyle.parameter("textureTriplanarSharpness$index", fetch.sharpness)
-                        shadeStyle.parameter("textureTriplanarScale$index", fetch.scale)
+                        shadeStyle.parameter("textureTriplanarSharpness$index", source.sharpness)
+                        shadeStyle.parameter("textureTriplanarScale$index", source.scale)
                     }
                 }
             }
@@ -292,8 +310,8 @@ class BasicMaterial : Material {
                             context.shadowMaps[light]?.let {
                                 val look = light.view(node)
                                 shadeStyle.parameter("lightTransform$index",
-                                        light.projection(it) * look )
-                                shadeStyle.parameter("lightShadowMap$index", it.depthBuffer?:TODO())
+                                        light.projection(it) * look)
+                                shadeStyle.parameter("lightShadowMap$index", it.depthBuffer ?: TODO())
                             }
                         }
                     }

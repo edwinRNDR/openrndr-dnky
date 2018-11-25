@@ -3,10 +3,8 @@ package org.openrndr.dnky
 import org.openrndr.color.ColorRGBa
 import org.openrndr.draw.*
 import org.openrndr.math.Matrix44
-import org.openrndr.math.Vector3
+import org.openrndr.math.Vector4
 import org.openrndr.math.transforms.lookAt
-import org.openrndr.math.transforms.transform
-import java.util.*
 
 enum class FacetType(val shaderFacet: String) {
     WORLD_POSITION("f_worldPosition"),
@@ -34,7 +32,6 @@ class ViewPositionFacet : ColorBufferFacetCombiner(setOf(FacetType.WORLD_POSITIO
     override fun generateShader(): String = "o_$targetOutput.rgb = v_viewPosition.rgb;"
 }
 
-
 class ClipPositionFacet : ColorBufferFacetCombiner(setOf(FacetType.CLIP_POSITION), "position", ColorFormat.RGB, ColorType.FLOAT16) {
     override fun generateShader() = "o_$targetOutput.rgb = gl_FragCoord.xyz;"
 }
@@ -46,7 +43,7 @@ class LDRColorFacet : ColorBufferFacetCombiner(setOf(FacetType.DIFFUSE, FacetTyp
 class RenderPass(val combiners: List<FacetCombiner>)
 
 val DefaultPass = RenderPass(listOf(LDRColorFacet()))
-val LightPass = RenderPass(listOf(ClipPositionFacet()))
+val LightPass = RenderPass(emptyList())
 
 fun createPassTarget(pass: RenderPass, width: Int, height: Int): RenderTarget {
     return renderTarget(width, height) {
@@ -56,14 +53,16 @@ fun createPassTarget(pass: RenderPass, width: Int, height: Int): RenderTarget {
                     colorBuffer(combiner.targetOutput, combiner.format, combiner.type)
             }
         }
-        depthBuffer(format = DepthFormat.DEPTH32F)
+        depthBuffer(format = DepthFormat.DEPTH16)
     }
 }
 
 class SceneRenderer {
 
     var shadowLightTargets = mutableMapOf<ShadowLight, RenderTarget>()
+    var meshCubemaps = mutableMapOf<Mesh, Cubemap>()
 
+    var cubemapDepthBuffer = depthBuffer(256,256, DepthFormat.DEPTH16, BufferMultisample.Disabled)
     fun draw(drawer: Drawer, scene: Scene, camera: Camera) {
         scene.drawFunctions.forEach {
             it()
@@ -80,9 +79,12 @@ class SceneRenderer {
         val fogs = scene.root.findContent { this as? Fog }
         val instancedMeshes = scene.root.findContent { this as? InstancedMesh }
 
+
+        val environmentMapMeshes =meshes.filter { (it.content.material as? BasicMaterial)?.environmentMap == true}
+
         run {
             val pass = LightPass
-            val materialContext = MaterialContext(pass, lights, fogs, shadowLightTargets)
+            val materialContext = MaterialContext(pass, lights, fogs, shadowLightTargets, emptyMap())
 
             lights.filter { it.content is ShadowLight && (it.content as ShadowLight).shadows }.forEach {
                 val shadowLight = it.content as ShadowLight
@@ -102,9 +104,43 @@ class SceneRenderer {
             }
         }
 
+
+        for ( content in environmentMapMeshes) {
+            val (node, mesh) = content
+            val position = (node.worldTransform * Vector4.UNIT_W).xyz
+            val pass = DefaultPass
+            val materialContext = MaterialContext(pass, lights, fogs, shadowLightTargets, emptyMap())
+
+            val cubemap = meshCubemaps.getOrPut(mesh) {
+                Cubemap.create(256)
+            }
+            for (side in CubemapSide.values()) {
+
+                val target = renderTarget(256, 256) {
+                    colorBuffer(cubemap.side(side))
+                    depthBuffer(cubemapDepthBuffer)
+                }
+
+                drawer.isolatedWithTarget(target) {
+                    drawer.background(ColorRGBa.PINK)
+                    drawer.perspective(90.0, 1.0,0.1, 100.0)
+                    drawer.view = Matrix44.IDENTITY
+                    drawer.model = Matrix44.IDENTITY
+                    drawer.lookAt(position, position + side.forward, side.up)
+                    drawPass(drawer, materialContext, meshes - content, instancedMeshes)
+                }
+
+                cubemap.generateMipmaps()
+
+                target.detachColorBuffers()
+                target.detachDepthBuffer()
+                target.destroy()
+            }
+        }
+
         run {
             val pass = DefaultPass
-            val materialContext = MaterialContext(pass, lights, fogs, shadowLightTargets)
+            val materialContext = MaterialContext(pass, lights, fogs, shadowLightTargets, meshCubemaps)
             drawPass(drawer, materialContext, meshes, instancedMeshes)
         }
     }
@@ -115,7 +151,7 @@ class SceneRenderer {
             drawer.isolated {
                 val shadeStyle = mesh.material.generateShadeStyle(materialContext)
                 shadeStyle.parameter("viewMatrixInverse", drawer.view.inversed)
-                mesh.material.applyToShadeStyle(materialContext, shadeStyle)
+                mesh.material.applyToShadeStyle(materialContext, shadeStyle, mesh)
                 drawer.shadeStyle = shadeStyle
                 drawer.model = it.node.worldTransform
                 drawer.vertexBuffer(mesh.geometry.vertexBuffers,
@@ -130,7 +166,7 @@ class SceneRenderer {
             drawer.isolated {
                 val shadeStyle = mesh.material.generateShadeStyle(materialContext)
                 shadeStyle.parameter("viewMatrixInverse", drawer.view.inversed)
-                mesh.material.applyToShadeStyle(materialContext, shadeStyle)
+                mesh.material.applyToShadeStyle(materialContext, shadeStyle, mesh)
                 drawer.shadeStyle = shadeStyle
                 drawer.model = it.node.worldTransform
                 drawer.vertexBufferInstances(mesh.geometry.vertexBuffers,
