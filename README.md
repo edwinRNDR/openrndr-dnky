@@ -7,7 +7,7 @@ real-time and interactive 3d-graphics in OPENRNDR.
 
 Currently barely works. DNKY's use currently looks like this:
 
-```
+```kotlin
 import org.openrndr.application
 import org.openrndr.color.ColorRGBa
 import org.openrndr.dnky.*
