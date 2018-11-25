@@ -93,8 +93,9 @@ private fun SpotLight.fs(index: Int): String = """
 private fun Fog.fs(index: Int): String = """
 |{
 |    float dz = min(1.0, -v_viewPosition.z/p_fogEnd$index);
-|    f_diffuse = mix(f_diffuse, 0.5 * p_fogColor$index.rgb, dz);
-|    f_specular = mix(f_specular, 0.5 * p_fogColor$index.rgb, dz);
+|    f_diffuse = mix(f_diffuse, (1.0/3.0) * p_fogColor$index.rgb, dz);
+|    f_specular = mix(f_specular, (1.0/3.0) * p_fogColor$index.rgb, dz);
+|    f_emissive = mix(f_emissive, (1.0/3.0) * p_fogColor$index.rgb, dz);
 |}
 """.trimMargin()
 
@@ -110,18 +111,30 @@ class Triplanar(texture: ColorBuffer,
                 var sharpness: Double = 2.0) : TextureFromColorBuffer(texture)
 
 private fun ModelCoordinates.fs(index: Int) = "vec4 tex$index = texture(p_texture$index ,$input);"
-private fun Triplanar.fs(index: Int) = """
+private fun Triplanar.fs(index: Int, target: TextureTarget) = """
 |vec4 tex$index = vec4(0.0, 0.0, 0.0, 1.0);
 |{
+|   vec3 n = normalize(va_normal);
+|   vec3 an = abs(n);
 |   vec2 uvY = va_position.xz * p_textureTriplanarScale$index;
 |   vec2 uvX = va_position.zy * p_textureTriplanarScale$index;
 |   vec2 uvZ = va_position.xy * p_textureTriplanarScale$index;
 |   vec4 tY = texture(p_texture$index, uvY);
 |   vec4 tX = texture(p_texture$index, uvX);
 |   vec4 tZ = texture(p_texture$index, uvZ);
-|   vec3 weights = pow(abs(va_normal), vec3(p_textureTriplanarSharpness$index));
+|   vec3 weights = pow(an, vec3(p_textureTriplanarSharpness$index));
 |   weights = weights / (weights.x + weights.y + weights.z);
 |   tex$index = tX * weights.x + tY * weights.y + weights.z * tZ;
+|   ${if(target == TextureTarget.NORMAL) """
+    |   vec3 tnX = normalize( (tX.xyz - vec3(0.5, 0.5, -0.1))*vec3(0.1,0.1,1.0));
+    |   vec3 tnY = normalize( (tY.xyz - vec3(0.5, 0.5, -0.1))*vec3(0.1,0.1,1.0) );
+    |   vec3 tnZ = normalize( (tZ.xyz - vec3(0.5, 0.5, -0.1))*vec3(0.1,0.1,1.0) );
+    |   vec3 nX = vec3(0.0, tnX.yx);
+    |   vec3 nY = vec3(tnY.x, 0.0, tnY.y);
+    |   vec3 nZ = vec3(tnZ.xy, 0.0);
+    |   vec3 normal = normalize(nX * weights.x + nY * weights.y + nZ * weights.z + n);
+    |   tex$index = vec4(normal, 0.0);
+""".trimMargin() else "" }
 |}
 """.trimMargin()
 
@@ -130,6 +143,7 @@ enum class TextureTarget {
     DIFFUSE,
     SPECULAR,
     DIFFUSE_SPECULAR,
+    EMISSIVE,
     NORMAL,
     SHININESS,
 }
@@ -137,11 +151,11 @@ enum class TextureTarget {
 class Texture(var source: TextureSource,
               var target: TextureTarget)
 
-
 class BasicMaterial : Material {
     var environmentMap = false
     var diffuse = ColorRGBa.WHITE
     var specular = ColorRGBa.WHITE
+    var emissive = ColorRGBa.BLACK
     var shininess = 1.0
     var vertexTransform: String? = null
     var fragmentTransform: String? = null
@@ -151,11 +165,15 @@ class BasicMaterial : Material {
     override fun generateShadeStyle(context: MaterialContext): ShadeStyle {
         val needLight = needLight(context)
 
+
         val preambleFS = """
             vec3 m_diffuse = p_diffuse.rgb;
             vec3 m_specular = p_specular.rgb;
             float m_shininess = p_shininess;
+            vec3 m_emissive = p_emissive.rgb;
             vec3 m_normal = vec3(0.0, 0.0, 1.0);
+
+            vec3 f_worldNormal = v_worldNormal;
         """.trimIndent()
 
         val textureFs = if (needLight) {
@@ -163,7 +181,7 @@ class BasicMaterial : Material {
                 when (val source = it.source) {
                     DummySource -> "vec4 tex$index = vec4(1.0);"
                     is ModelCoordinates -> source.fs(index)
-                    is Triplanar -> source.fs(index)
+                    is Triplanar -> source.fs(index, it.target)
                     else -> TODO()
                 }
             } + textures.mapIndexed { index, texture ->
@@ -172,7 +190,8 @@ class BasicMaterial : Material {
                     TextureTarget.DIFFUSE -> "m_diffuse.rgb *= tex$index.rgb;"
                     TextureTarget.DIFFUSE_SPECULAR -> "m_diffuse.rgb *= tex$index.rgb; m_specular.rgb *= tex$index.rgb;"
                     TextureTarget.SPECULAR -> "m_specular.rgb *= tex$index.rgb;"
-                    TextureTarget.NORMAL -> TODO()
+                    TextureTarget.EMISSIVE -> "m_emissive.rgb += tex$index.rgb;"
+                    TextureTarget.NORMAL -> "f_worldNormal = normalize((u_modelNormalMatrix * vec4(tex$index.xyz,0.0)).xyz); "
                     TextureTarget.SHININESS -> "m_shininess *= tex$index.r;"
                 }
             }).joinToString("\n")
@@ -182,7 +201,8 @@ class BasicMaterial : Material {
         val lightFS = if (needLight) """
         vec3 f_diffuse = vec3(0.0);
         vec3 f_specular = vec3(0.0);
-        vec3 wnn = normalize(v_worldNormal);
+        vec3 f_emissive = m_emissive;
+        vec3 wnn = normalize(f_worldNormal);
         vec3 ep = (p_viewMatrixInverse * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         vec3 edn = normalize(ep - v_worldPosition);
 
@@ -190,11 +210,10 @@ class BasicMaterial : Material {
             float fresnelBias = 0.1;
             float fresnelScale = 0.5;
             float fresnelPower = 0.3;
-            float reflectivity = fresnelBias + fresnelScale * pow(1.0 + dot(-edn, v_worldNormal), fresnelPower);
+            float reflectivity = fresnelBias + fresnelScale * pow(1.0 + dot(-edn, f_worldNormal), fresnelPower);
 
-            f_specular.rgb += texture(p_environmentMap, reflect(-edn, normalize(v_worldNormal))).rgb * reflectivity;
+            f_specular.rgb += texture(p_environmentMap, reflect(-edn, normalize(f_worldNormal))).rgb * reflectivity;
         """.trimIndent()  else ""  }
-
 
         ${lights.mapIndexed { index, (node, light) ->
             when (light) {
@@ -226,6 +245,13 @@ class BasicMaterial : Material {
         val fs = preambleFS + textureFs + lightFS + combinerFS
 
         return shadeStyle {
+            fragmentPreamble = """
+            |vec3 rnmBlendUnpacked(vec3 n1, vec3 n2) {
+            |   n1 += vec3( 0,  0, 1);
+            |   n2 *= vec3(-1, -1, 1);
+            |   return normalize(n1*dot(n1, n2)/n1.z - n2);
+            |}
+            """.trimMargin()
             this.suppressDefaultOutput = true
             this.vertexTransform = this@BasicMaterial.vertexTransform
             fragmentTransform = fs
@@ -250,12 +276,12 @@ class BasicMaterial : Material {
         if (entity is Mesh) {
             if (environmentMap) {
                 context.meshCubemaps[entity]?.let {
-                    println("setting envmap to $it")
                     shadeStyle.parameter("environmentMap", it)
                 }
             }
         }
 
+        shadeStyle.parameter("emissive", emissive)
         shadeStyle.parameter("specular", specular)
         shadeStyle.parameter("diffuse", diffuse)
         shadeStyle.parameter("shininess", shininess)
@@ -352,6 +378,5 @@ fun BasicMaterial.texture(init: Texture.() -> Unit): Texture {
     textures.add(texture)
     return texture
 }
-
 
 fun MeshBase.basicMaterial(init: BasicMaterial.() -> Unit): BasicMaterial = material(init)

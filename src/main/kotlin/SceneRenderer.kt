@@ -4,7 +4,6 @@ import org.openrndr.color.ColorRGBa
 import org.openrndr.draw.*
 import org.openrndr.math.Matrix44
 import org.openrndr.math.Vector4
-import org.openrndr.math.transforms.lookAt
 
 enum class FacetType(val shaderFacet: String) {
     WORLD_POSITION("f_worldPosition"),
@@ -12,7 +11,8 @@ enum class FacetType(val shaderFacet: String) {
     CLIP_POSITION("f_clipPosition"),
     WORLD_NORMAL("f_worldNormal"),
     SPECULAR("f_specular"),
-    DIFFUSE("f_diffuse")
+    DIFFUSE("f_diffuse"),
+    EMISSIVE("f_emissive")
 }
 
 abstract class FacetCombiner(val facets: Set<FacetType>, val targetOutput: String) {
@@ -37,7 +37,7 @@ class ClipPositionFacet : ColorBufferFacetCombiner(setOf(FacetType.CLIP_POSITION
 }
 
 class LDRColorFacet : ColorBufferFacetCombiner(setOf(FacetType.DIFFUSE, FacetType.SPECULAR), "color", ColorFormat.RGBa, ColorType.UINT8) {
-    override fun generateShader() = "o_$targetOutput.rgba = vec4(f_diffuse.rgb + f_specular.rgb, 1.0);"
+    override fun generateShader() = "o_$targetOutput.rgba = vec4(f_diffuse.rgb + f_specular.rgb + f_emissive.rgb, 1.0);"
 }
 
 class RenderPass(val combiners: List<FacetCombiner>)
@@ -62,9 +62,9 @@ class SceneRenderer {
     var shadowLightTargets = mutableMapOf<ShadowLight, RenderTarget>()
     var meshCubemaps = mutableMapOf<Mesh, Cubemap>()
 
-    var cubemapDepthBuffer = depthBuffer(256,256, DepthFormat.DEPTH16, BufferMultisample.Disabled)
+    var cubemapDepthBuffer = depthBuffer(256, 256, DepthFormat.DEPTH16, BufferMultisample.Disabled)
     fun draw(drawer: Drawer, scene: Scene, camera: Camera) {
-        scene.drawFunctions.forEach {
+        scene.updateFunctions.forEach {
             it()
         }
 
@@ -78,9 +78,7 @@ class SceneRenderer {
         val meshes = scene.root.findContent { this as? Mesh }
         val fogs = scene.root.findContent { this as? Fog }
         val instancedMeshes = scene.root.findContent { this as? InstancedMesh }
-
-
-        val environmentMapMeshes =meshes.filter { (it.content.material as? BasicMaterial)?.environmentMap == true}
+        val environmentMapMeshes = meshes.filter { (it.content.material as? BasicMaterial)?.environmentMap == true }
 
         run {
             val pass = LightPass
@@ -104,8 +102,7 @@ class SceneRenderer {
             }
         }
 
-
-        for ( content in environmentMapMeshes) {
+        for (content in environmentMapMeshes) {
             val (node, mesh) = content
             val position = (node.worldTransform * Vector4.UNIT_W).xyz
             val pass = DefaultPass
@@ -123,15 +120,13 @@ class SceneRenderer {
 
                 drawer.isolatedWithTarget(target) {
                     drawer.background(ColorRGBa.PINK)
-                    drawer.perspective(90.0, 1.0,0.1, 100.0)
+                    drawer.perspective(90.0, 1.0, 0.1, 100.0)
                     drawer.view = Matrix44.IDENTITY
                     drawer.model = Matrix44.IDENTITY
                     drawer.lookAt(position, position + side.forward, side.up)
                     drawPass(drawer, materialContext, meshes - content, instancedMeshes)
                 }
-
                 cubemap.generateMipmaps()
-
                 target.detachColorBuffers()
                 target.detachDepthBuffer()
                 target.destroy()
@@ -179,4 +174,3 @@ class SceneRenderer {
         }
     }
 }
-

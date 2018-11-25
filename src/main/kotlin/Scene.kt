@@ -3,7 +3,7 @@ package org.openrndr.dnky
 import org.openrndr.math.Matrix44
 
 class Scene(val root: SceneNode = SceneNode(),
-            val drawFunctions: MutableList<() -> Unit> = mutableListOf())
+            val updateFunctions: MutableList<() -> Unit> = mutableListOf())
 
 class NodeContent<T : Entity>(val node: SceneNode, val content: T) {
     operator fun component1() = node
@@ -55,8 +55,8 @@ fun scene(init: Scene.() -> Unit): Scene {
     return scene
 }
 
-fun Scene.draw(drawFunction: () -> Unit) {
-    drawFunctions.add(drawFunction)
+fun Scene.update(updateFunction: () -> Unit) {
+    updateFunctions.add(updateFunction)
 }
 
 fun Scene.node(init: SceneNode.() -> Unit): SceneNode {
@@ -135,7 +135,7 @@ fun SceneNode.fog(init:Fog.() -> Unit) : Fog {
 private fun sample() {
     val s = scene {
         node {
-            draw {
+            update {
                 transform = Matrix44.IDENTITY
             }
             node {
