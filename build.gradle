@@ -14,7 +14,7 @@ repositories {
     }
 }
 
-ext.openrndr_version = "0.3.30-rc2"
+ext.openrndr_version = "0.3.30"
 dependencies {
     compile "org.openrndr:openrndr-core:$openrndr_version"
     compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
