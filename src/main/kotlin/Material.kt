@@ -104,13 +104,13 @@ object DummySource : TextureSource()
 abstract class TextureFromColorBuffer(val texture: ColorBuffer) : TextureSource()
 
 class ModelCoordinates(texture: ColorBuffer,
-                       val input: String = "v_texCoord0.xy") : TextureFromColorBuffer(texture)
+                       val input: String = "va_texCoord0.xy") : TextureFromColorBuffer(texture)
 
 class Triplanar(texture: ColorBuffer,
                 var scale: Double = 1.0,
                 var sharpness: Double = 2.0) : TextureFromColorBuffer(texture)
 
-private fun ModelCoordinates.fs(index: Int) = "vec4 tex$index = texture(p_texture$index ,$input);"
+private fun ModelCoordinates.fs(index: Int) = "vec4 tex$index = texture(p_texture$index, $input);"
 private fun Triplanar.fs(index: Int, target: TextureTarget) = """
 |vec4 tex$index = vec4(0.0, 0.0, 0.0, 1.0);
 |{
