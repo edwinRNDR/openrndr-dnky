@@ -108,7 +108,14 @@ class ModelCoordinates(texture: ColorBuffer,
 
 class Triplanar(texture: ColorBuffer,
                 var scale: Double = 1.0,
-                var sharpness: Double = 2.0) : TextureFromColorBuffer(texture)
+                var sharpness: Double = 2.0) : TextureFromColorBuffer(texture) {
+
+    init {
+        texture.filter(MinifyingFilter.LINEAR_MIPMAP_LINEAR, MagnifyingFilter.LINEAR)
+        texture.wrapU = WrapMode.REPEAT
+        texture.wrapV = WrapMode.REPEAT
+    }
+}
 
 private fun ModelCoordinates.fs(index: Int) = "vec4 tex$index = texture(p_texture$index, $input);"
 private fun Triplanar.fs(index: Int, target: TextureTarget) = """
@@ -293,6 +300,7 @@ class BasicMaterial : Material {
                 is Vector2 -> shadeStyle.parameter(k, v)
                 is Vector3 -> shadeStyle.parameter(k, v)
                 is Vector4 -> shadeStyle.parameter(k, v)
+                is BufferTexture -> shadeStyle.parameter(k, v)
                 else -> TODO("support ${v::class.java}")
             }
         }
