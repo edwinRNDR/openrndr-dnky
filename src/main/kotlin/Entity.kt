@@ -99,12 +99,13 @@ class SpotLight(var direction: Vector3 = Vector3.UNIT_Z, var innerAngle: Double 
     }
 }
 
-class AreaLight() : Light(), ShadowLight {
+class AreaLight : Light(), ShadowLight {
     var width: Double = 1.0
     var height: Double = 1.0
+    var distanceField: ColorBuffer? = null
     override var shadows: Boolean = false
     override fun projection(renderTarget: RenderTarget): Matrix44 {
-        return ortho(-width/2.0, width/2.0, -height/2.0, height/2.0, 0.0, 1000.0)
+        return ortho(-width / 2.0, width / 2.0, -height / 2.0, height / 2.0, 0.0, 1000.0)
     }
 }
 

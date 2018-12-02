@@ -37,7 +37,7 @@ class ClipPositionFacet : ColorBufferFacetCombiner(setOf(FacetType.CLIP_POSITION
 }
 
 class LDRColorFacet : ColorBufferFacetCombiner(setOf(FacetType.DIFFUSE, FacetType.SPECULAR), "color", ColorFormat.RGBa, ColorType.UINT8) {
-    override fun generateShader() = "o_$targetOutput.rgba = vec4(f_diffuse.rgb + f_specular.rgb + f_emissive.rgb, 1.0);"
+    override fun generateShader() = "o_$targetOutput.rgba = pow(vec4(f_diffuse.rgb + f_specular.rgb + f_emissive.rgb, 1.0), vec4(2.2));"
 }
 
 class RenderPass(val combiners: List<FacetCombiner>)

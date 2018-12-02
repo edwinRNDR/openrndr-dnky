@@ -66,10 +66,25 @@ private fun AreaLight.fs(index: Int): String = """
 |   vec3 dir = projection - p_lightPosition$index;
 |   vec2 diagonal = vec2(dot(dir,p_lightTangent$index),dot(dir,up));
 |   vec2 nearest2D = vec2(clamp( diagonal.x,-width,width  ),clamp(  diagonal.y,-height,height));
+            ${if(distanceField!=null) """
+                vec2 dtc = nearest2D / (vec2(width, height) * 2.0) + vec2(0.5);
+                vec3 ddir = texture(p_lightDistanceField$index, dtc).rgb;
+
+                ddir.xy /= textureSize(p_lightDistanceField$index, 0);
+
+                if (ddir.z < 0.5) {
+                    nearest2D += ddir.xy * vec2(width, height);
+                }
+
+            """.trimIndent() else ""}
+
+
+
+
 |   vec3 nearestPointInside = p_lightPosition$index + (p_lightTangent$index*nearest2D.x+up*nearest2D.y);
 |   float dist = distance(v_worldPosition, nearestPointInside);
 |   vec3 L = normalize(nearestPointInside - v_worldPosition);
-|   float attenuation = 1.0 / (1.0 + dist);
+|   float attenuation = 1.0 / (1.0 + dist*0.1);
 |   float nDotL = dot(p_lightDirection$index, -L);
 |   if (nDotL > 0.0 && sideOfPlane(v_worldPosition, p_lightPosition$index, p_lightDirection$index) == 1) {
 |       vec3 R = reflect(edn, wnn);
@@ -79,7 +94,21 @@ private fun AreaLight.fs(index: Int): String = """
 |           vec3 dirSpec = E - p_lightPosition$index;
 |
 |           vec2 dirSpec2D = vec2(dot(dirSpec, p_lightTangent$index), dot(dirSpec,up));
-|           vec2 nearestSpec2D = vec2(clamp( dirSpec2D.x,-width,width  ),clamp(  dirSpec2D.y,-height,height));
+            float eps = 0.0;
+|           vec2 nearestSpec2D = vec2(clamp( dirSpec2D.x,-width + eps,width-eps  ),clamp(  dirSpec2D.y,-height + eps ,height - eps));
+            ${if(distanceField!=null) """
+                vec2 tc = nearestSpec2D / (vec2(width, height) * 2.0) + vec2(0.5);
+
+                vec3 dir = texture(p_lightDistanceField$index, tc).rgb;
+
+                dir.xy /= textureSize(p_lightDistanceField$index, 0);
+
+                if (dir.z == 0.0) {
+                    nearestSpec2D += dir.xy * vec2(width, -height);
+                }
+
+            """.trimIndent() else ""}
+
 |           vec3 nearestSpec3D = p_lightPosition$index + (p_lightTangent$index*nearestSpec2D.x+up*nearestSpec2D.y);
 |
 |
@@ -88,10 +117,11 @@ private fun AreaLight.fs(index: Int): String = """
 |           float realDist = length(toLight);
 |           float specDist = length(nearestSpec2D-dirSpec2D);
 |           float specFactor = exp(-specDist) * exp(-realDist*0.05) * sf; //1.0-clamp(length(nearestSpec2D-dirSpec2D)* (sf*10.0 + 1.0),0.0,1.0);
-|           f_specular += p_lightColor$index.rgb * specFactor * specAngle * m_specular.rgb;
+            //specFactor =1.0-clamp(length(nearestSpec2D-dirSpec2D), 0.0, 1.0);
+            f_specular += p_lightColor$index.rgb * specFactor * specAngle * m_specular.rgb;
 |       }
 |   }
-|   f_diffuse += m_diffuse.rgb * p_lightColor$index.rgb  * max(0.0, nDotL) * attenuation;
+    f_diffuse += m_diffuse.rgb * p_lightColor$index.rgb  * max(0.0, nDotL) * attenuation;
 |}
 """.trimIndent()
 
@@ -407,6 +437,11 @@ class BasicMaterial : Material {
                         shadeStyle.parameter("lightDirection$index", ((normalMatrix(node.worldTransform)) * Vector3(0.0, 0.0, 1.0)).normalized)
                         shadeStyle.parameter("lightTangent$index", ((normalMatrix(node.worldTransform)) * Vector3(1.0, 0.0, 0.0)).normalized)
                         shadeStyle.parameter("lightSize$index", Vector2(light.width/2.0, light.height/2.0))
+
+                        light.distanceField?.let {
+                            shadeStyle.parameter("lightDistanceField$index", it)
+                        }
+
                     }
                 }
             }
