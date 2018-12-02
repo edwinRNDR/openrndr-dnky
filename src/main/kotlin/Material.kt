@@ -57,6 +57,45 @@ private fun HemisphereLight.fs(index: Int): String = """
 |}
 """.trimMargin()
 
+private fun AreaLight.fs(index: Int): String = """
+|{
+|   vec3 up = cross(p_lightTangent$index, p_lightDirection$index);
+|   float width = p_lightSize$index.x;
+|   float height = p_lightSize$index.y;
+|   vec3 projection = projectOnPlane(v_worldPosition, p_lightPosition$index, p_lightDirection$index);
+|   vec3 dir = projection - p_lightPosition$index;
+|   vec2 diagonal = vec2(dot(dir,p_lightTangent$index),dot(dir,up));
+|   vec2 nearest2D = vec2(clamp( diagonal.x,-width,width  ),clamp(  diagonal.y,-height,height));
+|   vec3 nearestPointInside = p_lightPosition$index + (p_lightTangent$index*nearest2D.x+up*nearest2D.y);
+|   float dist = distance(v_worldPosition, nearestPointInside);
+|   vec3 L = normalize(nearestPointInside - v_worldPosition);
+|   float attenuation = 1.0 / (1.0 + dist);
+|   float nDotL = dot(p_lightDirection$index, -L);
+|   if (nDotL > 0.0 && sideOfPlane(v_worldPosition, p_lightPosition$index, p_lightDirection$index) == 1) {
+|       vec3 R = reflect(edn, wnn);
+|       vec3 E = linePlaneIntersect(v_worldPosition ,R, p_lightPosition$index, p_lightDirection$index);
+|       float specAngle = dot(R, p_lightDirection$index);
+|       if (specAngle > 0.0) {
+|           vec3 dirSpec = E - p_lightPosition$index;
+|
+|           vec2 dirSpec2D = vec2(dot(dirSpec, p_lightTangent$index), dot(dirSpec,up));
+|           vec2 nearestSpec2D = vec2(clamp( dirSpec2D.x,-width,width  ),clamp(  dirSpec2D.y,-height,height));
+|           vec3 nearestSpec3D = p_lightPosition$index + (p_lightTangent$index*nearestSpec2D.x+up*nearestSpec2D.y);
+|
+|
+|           vec3 toLight = nearestSpec3D-v_worldPosition;
+|           float sf = max(0.0, dot(-normalize(toLight), p_lightDirection$index));
+|           float realDist = length(toLight);
+|           float specDist = length(nearestSpec2D-dirSpec2D);
+|           float specFactor = exp(-specDist) * exp(-realDist*0.05) * sf; //1.0-clamp(length(nearestSpec2D-dirSpec2D)* (sf*10.0 + 1.0),0.0,1.0);
+|           f_specular += p_lightColor$index.rgb * specFactor * specAngle * m_specular.rgb;
+|       }
+|   }
+|   f_diffuse += m_diffuse.rgb * p_lightColor$index.rgb  * max(0.0, nDotL) * attenuation;
+|}
+""".trimIndent()
+
+
 private fun SpotLight.fs(index: Int): String = """
 |{
 |   vec3 dp = p_lightPosition$index - v_worldPosition;
@@ -229,6 +268,7 @@ class BasicMaterial : Material {
                 is SpotLight -> light.fs(index)
                 is DirectionalLight -> light.fs(index)
                 is HemisphereLight -> light.fs(index)
+                is AreaLight -> light.fs(index)
                 else -> TODO()
             }
         }.joinToString("\n")}
@@ -253,11 +293,9 @@ class BasicMaterial : Material {
 
         return shadeStyle {
             fragmentPreamble = """
-            |vec3 rnmBlendUnpacked(vec3 n1, vec3 n2) {
-            |   n1 += vec3( 0,  0, 1);
-            |   n2 *= vec3(-1, -1, 1);
-            |   return normalize(n1*dot(n1, n2)/n1.z - n2);
-            |}
+            |$shaderLinePlaneIntersect
+            |$shaderProjectOnPlane
+            |$shaderSideOfPlane
             """.trimMargin()
             this.suppressDefaultOutput = true
             this.vertexTransform = this@BasicMaterial.vertexTransform
@@ -362,6 +400,13 @@ class BasicMaterial : Material {
                         light.irradianceMap?.let {
                             shadeStyle.parameter("lightIrradianceMap$index", it)
                         }
+                    }
+
+                    is AreaLight -> {
+                        shadeStyle.parameter("lightPosition$index", (node.worldTransform * Vector4.UNIT_W).xyz)
+                        shadeStyle.parameter("lightDirection$index", ((normalMatrix(node.worldTransform)) * Vector3(0.0, 0.0, 1.0)).normalized)
+                        shadeStyle.parameter("lightTangent$index", ((normalMatrix(node.worldTransform)) * Vector3(1.0, 0.0, 0.0)).normalized)
+                        shadeStyle.parameter("lightSize$index", Vector2(light.width/2.0, light.height/2.0))
                     }
                 }
             }
