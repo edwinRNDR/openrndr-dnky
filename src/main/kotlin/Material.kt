@@ -177,6 +177,7 @@ class ModelCoordinates(texture: ColorBuffer,
 
 class Triplanar(texture: ColorBuffer,
                 var scale: Double = 1.0,
+                var offset: Vector3 = Vector3.ZERO,
                 var sharpness: Double = 2.0) : TextureFromColorBuffer(texture) {
 
     init {
@@ -192,9 +193,9 @@ private fun Triplanar.fs(index: Int, target: TextureTarget) = """
 |{
 |   vec3 n = normalize(va_normal);
 |   vec3 an = abs(n);
-|   vec2 uvY = va_position.xz * p_textureTriplanarScale$index;
-|   vec2 uvX = va_position.zy * p_textureTriplanarScale$index;
-|   vec2 uvZ = va_position.xy * p_textureTriplanarScale$index;
+|   vec2 uvY = va_position.xz * p_textureTriplanarScale$index + p_textureTriplanarOffset$index.x;
+|   vec2 uvX = va_position.zy * p_textureTriplanarScale$index + p_textureTriplanarOffset$index.y;
+|   vec2 uvZ = va_position.xy * p_textureTriplanarScale$index + p_textureTriplanarOffset$index.z;
 |   vec4 tY = texture(p_texture$index, uvY);
 |   vec4 tX = texture(p_texture$index, uvX);
 |   vec4 tZ = texture(p_texture$index, uvZ);
@@ -381,6 +382,7 @@ class BasicMaterial : Material {
                     is Triplanar -> {
                         shadeStyle.parameter("textureTriplanarSharpness$index", source.sharpness)
                         shadeStyle.parameter("textureTriplanarScale$index", source.scale)
+                        shadeStyle.parameter("textureTriplanarOffset$index", source.offset)
                     }
                 }
             }
