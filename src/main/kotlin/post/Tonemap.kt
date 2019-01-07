@@ -5,4 +5,11 @@ import org.openrndr.draw.Shader
 
 class TonemapUncharted2 : Filter(Shader.createFromCode(
         Filter.filterVertexCode,
-        filterFragmentCode("tonemap-uncharted2.frag")))
+        filterFragmentCode("tonemap-uncharted2.frag"))) {
+
+    var exposureBias: Double by parameters
+
+    init {
+        exposureBias = 1.0
+    }
+}

@@ -172,6 +172,17 @@ sealed class TextureSource
 object DummySource : TextureSource()
 abstract class TextureFromColorBuffer(val texture: ColorBuffer) : TextureSource()
 
+class TextureFromCode(val code:String) : TextureSource()
+private fun TextureFromCode.fs(index: Int, target: TextureTarget) = """
+|vec4 tex$index = vec4(0.0, 0.0, 0.0, 1.0);
+|{
+|vec4 texture;
+|$code;
+|tex$index = texture;
+|}
+"""
+
+
 class ModelCoordinates(texture: ColorBuffer,
                        val input: String = "va_texCoord0.xy") : TextureFromColorBuffer(texture)
 
@@ -223,6 +234,7 @@ enum class TextureTarget {
     EMISSIVE,
     NORMAL,
     SHININESS,
+    REFLECTIVITY
 }
 
 class Texture(var source: TextureSource,
@@ -234,8 +246,8 @@ class BasicMaterial : Material {
     var specular = ColorRGBa.WHITE
     var emissive = ColorRGBa.BLACK
     var shininess = 1.0
+    var reflectivity = 1.0
     var vertexTransform: String? = null
-    var fragmentTransform: String? = null
     var parameters = mutableMapOf<String, Any>()
     var textures = mutableListOf<Texture>()
 
@@ -246,6 +258,7 @@ class BasicMaterial : Material {
         val preambleFS = """
             vec3 m_diffuse = p_diffuse.rgb;
             vec3 m_specular = p_specular.rgb;
+            float m_reflectivity = p_reflectivity;
             float m_shininess = p_shininess;
             vec3 m_emissive = p_emissive.rgb;
             vec3 m_normal = vec3(0.0, 0.0, 1.0);
@@ -259,6 +272,7 @@ class BasicMaterial : Material {
                     DummySource -> "vec4 tex$index = vec4(1.0);"
                     is ModelCoordinates -> source.fs(index)
                     is Triplanar -> source.fs(index, it.target)
+                    is TextureFromCode -> source.fs(index, it.target)
                     else -> TODO()
                 }
             } + textures.mapIndexed { index, texture ->
@@ -270,6 +284,7 @@ class BasicMaterial : Material {
                     TextureTarget.EMISSIVE -> "m_emissive.rgb += tex$index.rgb;"
                     TextureTarget.NORMAL -> "f_worldNormal = normalize((u_modelNormalMatrix * vec4(tex$index.xyz,0.0)).xyz); "
                     TextureTarget.SHININESS -> "m_shininess *= tex$index.r;"
+                    TextureTarget.REFLECTIVITY -> "m_reflectivity *= tex$index.r;"
                 }
             }).joinToString("\n")
         } else ""
@@ -361,6 +376,7 @@ class BasicMaterial : Material {
         shadeStyle.parameter("specular", specular)
         shadeStyle.parameter("diffuse", diffuse)
         shadeStyle.parameter("shininess", shininess)
+        shadeStyle.parameter("reflectivity", reflectivity)
 
         parameters.forEach { k, v ->
             when (v) {
@@ -384,6 +400,7 @@ class BasicMaterial : Material {
                         shadeStyle.parameter("textureTriplanarScale$index", source.scale)
                         shadeStyle.parameter("textureTriplanarOffset$index", source.offset)
                     }
+
                 }
             }
 

@@ -23,7 +23,7 @@ float _filter(vec2 pos, int window) {
         for (int i = -window; i<=window; ++i) {
             float o = texture(occlusion, pos + vec2(i,j)*step).r;
             float depth = texture(positions, pos + vec2(i,j)*step).z;
-            float lw = smoothstep(0.01, 0.0, depthRef - depth);
+            float lw = smoothstep(0.5, 0.499, abs(depthRef - depth));
             sum += o * lw;
             w += lw;
 

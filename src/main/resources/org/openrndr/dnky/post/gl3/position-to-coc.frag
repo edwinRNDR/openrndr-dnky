@@ -12,6 +12,12 @@ uniform float focalPlane;
 uniform float aperture;
 uniform float exposure;
 
+uniform float aberrationConstant;
+uniform float aberrationLinear;
+
+uniform float aberrationBlendConstant;
+uniform float aberrationBlendLinear;
+
 
 float coc(vec2 uv) {
     float eyeZ = -texture(position, uv).z;
@@ -34,7 +40,14 @@ void main() {
         }
     }
     size = min(coc(v_texCoord0), size/w);
-    vec3 color = texture(image, v_texCoord0).rgb;
+    float a = (size-minCoc) / (maxCoc-minCoc);
+    float colorR = texture(image, v_texCoord0).r;
+    float colorG = texture(image, v_texCoord0+ vec2(step.x, 0.0)*(aberrationLinear*a + aberrationConstant) ).g;
+    float colorB = texture(image, v_texCoord0+ vec2(0.0, step.y)*(aberrationLinear*a + aberrationConstant) ).b;
 
-    o_output = vec4(color*exposure*size, size);
+    float f = clamp(aberrationBlendLinear * a + aberrationBlendConstant,0.0, 1.0);
+
+    vec3 color = mix(texture(image, v_texCoord0).rgb, vec3(colorR, colorG, colorB), f);
+
+    o_output = vec4(color*size, size);
 }

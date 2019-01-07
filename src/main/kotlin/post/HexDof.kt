@@ -79,6 +79,12 @@ class PositionToCoc : Filter(Shader.createFromCode(Filter.filterVertexCode, filt
 
     var position: Int by parameters
 
+    var aberrationConstant: Double by parameters
+    var aberrationLinear: Double by parameters
+
+    var aberrationBlendConstant: Double by parameters
+    var aberrationBlendLinear: Double by parameters
+
     init {
         minCoc = 2.0
         maxCoc = 20.0
@@ -87,15 +93,9 @@ class PositionToCoc : Filter(Shader.createFromCode(Filter.filterVertexCode, filt
 
         focalPlane = 4.0
         aperture = 1.0
+        aberrationConstant = 0.0
+        aberrationLinear = 8.0
+        aberrationBlendConstant = 0.0
+        aberrationBlendLinear = 1.0
     }
 }
-
-//class CocBlur : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmentCode("screenspace/coc-blur.frag"))) {
-//    var window: Int by parameters
-//    var sigma: Double by parameters
-//
-//    init {
-//        window = 4
-//        sigma = 4.0
-//    }
-//}

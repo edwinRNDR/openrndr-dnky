@@ -6,7 +6,7 @@ in vec2 v_texCoord0;
 uniform sampler2D colors;
 uniform sampler2D normals;
 uniform sampler2D positions;
-//uniform sampler2D material;
+uniform sampler2D material;
 
 // --- transforms ---
 uniform mat4 projection;
@@ -166,7 +166,7 @@ void main() {
     vec3 hitPoint = vec3(0.0, 0.0, 0.0);
 
     vec2 jitter = abs(hash22(v_texCoord0));
-    float reflectivity = 1.0; //texture(normals, v_texCoord0).a;
+    float reflectivity = texture(material, v_texCoord0).r;
 
     vec2 ts = vec2(textureSize(normals, 0).xy);
     vec3 viewNormal = normalize(texture(normals, v_texCoord0).xyz);// + (texture(noise, v_texCoord0*0.1).xyz - 0.5) * 0.0;
@@ -204,6 +204,7 @@ void main() {
         o_color.rgb = texture(colors, v_texCoord0).rgb + (reflectivity * reflectedColor.rgb * hitFade * frontalFade * distanceFade * borderFade * gain);
         o_color.a = 1.0;
     } else {
-        o_color = vec4(0.0);
+        o_color =  texture(colors, v_texCoord0).rgba;
+        o_color.a = 1.0;
     }
 }

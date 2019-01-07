@@ -11,6 +11,7 @@ float W = 11.2;
 
 in vec2 v_texCoord0;
 uniform sampler2D tex0;
+uniform float exposureBias;
 out vec4 o_color;
 
 
@@ -22,10 +23,7 @@ vec3 Uncharted2Tonemap(vec3 x) {
 void main()
 {
    vec3 texColor = texture(tex0, v_texCoord0).rgb;
-   texColor *= 1;  // Hardcoded Exposure Adjustment
-
-   float ExposureBias = 2.0;
-   vec3 curr = Uncharted2Tonemap(ExposureBias*texColor);
+   vec3 curr = Uncharted2Tonemap(exposureBias*texColor);
 
    vec3 whiteScale = 1.0/Uncharted2Tonemap(vec3(W));
    vec3 color = curr*whiteScale;

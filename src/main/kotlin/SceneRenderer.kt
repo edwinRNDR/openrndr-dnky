@@ -37,6 +37,12 @@ class DiffuseSpecularFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE, 
             "o_$targetOutput =vec4( max(vec3(0.0), f_diffuse.rgb) + max(vec3(0.0), f_specular.rgb), 1.0);"
 }
 
+class MaterialFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE),
+        "material", ColorFormat.RGBa, ColorType.UINT8) {
+    override fun generateShader(): String =
+        "o_$targetOutput = vec4(m_reflectivity, 0.0, 0.0, 0.0);"
+}
+
 class DiffuseFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE),
         "diffuse", ColorFormat.RGB, ColorType.FLOAT16) {
     override fun generateShader(): String =
@@ -165,7 +171,6 @@ class SceneRenderer {
                 Cubemap.create(256)
             }
             for (side in CubemapSide.values()) {
-
                 val target = renderTarget(256, 256) {
                     colorBuffer(cubemap.side(side))
                     depthBuffer(cubemapDepthBuffer)
