@@ -19,7 +19,7 @@ enum class FacetType(val shaderFacet: String) {
     VIEW_NORMAL("f_viewNormal"),
     SPECULAR("f_specular"),
     DIFFUSE("f_diffuse"),
-    EMISSIVE("f_emissive")
+    EMISSIVE("f_emission")
 }
 
 abstract class FacetCombiner(val facets: Set<FacetType>, val targetOutput: String) {
@@ -82,7 +82,7 @@ class ClipPositionFacet : ColorBufferFacetCombiner(setOf(FacetType.CLIP_POSITION
 }
 
 class LDRColorFacet : ColorBufferFacetCombiner(setOf(FacetType.DIFFUSE, FacetType.SPECULAR), "color", ColorFormat.RGBa, ColorType.UINT8) {
-    override fun generateShader() = "o_$targetOutput.rgba = pow(vec4(f_diffuse.rgb + f_specular.rgb + f_emissive.rgb, 1.0), vec4(1.0));"
+    override fun generateShader() = "o_$targetOutput.rgba = pow(vec4(f_diffuse.rgb + f_specular.rgb + f_emission * m_color.rgb, 1.0), vec4(1.0));"
 }
 
 class RenderPass(val combiners: List<FacetCombiner>)

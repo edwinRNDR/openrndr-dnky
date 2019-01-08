@@ -31,7 +31,7 @@ private fun PointLight.fs(index: Int): String = """
 |   f_diffuse += attenuation * max(0, side / 3.1415) * p_lightColor$index.rgb * m_color.rgb;
 //|   if (side > 0.0) {
 //|       float f = max(0.0, dot(reflect(-dpn, wnn), edn));
-|       f_specular += attenuation * ggx(wnn, edn, dpn, 0.3, 0.0) * p_lightColor$index.rgb * m_color.rgb;
+|       f_specular += attenuation * ggx(wnn, edn, dpn, m_roughness, 0.5) * p_lightColor$index.rgb * m_color.rgb;
 //|   }
 }
 """.trimMargin()
@@ -41,10 +41,13 @@ private fun AmbientLight.fs(index: Int): String = "light += p_lightColor$index.r
 private fun DirectionalLight.fs(index: Int) = """
 |{
 |    float side = dot(-wnn, p_lightDirection$index);
+|    vec3 dpn = p_lightDirection$index;
+|
 |    f_diffuse += max(0, side) * p_lightColor$index.rgb * m_color.rgb;
 |    if (side > 0.0) {
 |        float f = max(0.0, dot(reflect(p_lightDirection$index, wnn), edn));
-|        f_specular += pow(f, m_shininess) * p_lightColor$index.rgb * m_color.rgb;
+|        f_specular += ggx(wnn, edn, dpn, m_roughness, 0.0) * p_lightColor$index.rgb * m_color.rgb;
+//|        f_specular += pow(f, m_shininess) * p_lightColor$index.rgb * m_color.rgb;
 |    }
 |}
 """.trimMargin()
@@ -151,11 +154,11 @@ private fun SpotLight.fs(index: Int): String = """
     |
     |}
 """.trimMargin() else ""}
-|   f_diffuse += attenuation * max(0, side) * p_lightColor$index.rgb * p_color.rgb;
-|   if (side > 0.0) {
+|   f_diffuse += attenuation * max(0, side) / 3.1415 * p_lightColor$index.rgb * p_color.rgb;
+
 |       float f = max(0.0, dot(reflect(-dpn, wnn), edn));
-|       f_specular += attenuation * pow(f, m_shininess) * p_lightColor$index.rgb * m_color.rgb;
-|   }
+|       f_specular += attenuation * ggx(wnn, edn, dpn, m_roughness, 0.1) * p_lightColor$index.rgb * m_color.rgb;
+
 }
 """.trimMargin()
 
@@ -294,12 +297,20 @@ class BasicMaterial : Material {
         vec3 edn = normalize(ed);
 
         ${if(environmentMap && context.meshCubemaps.isNotEmpty()) """
+
+            /*
             float fresnelBias = 0.1;
             float fresnelScale = 0.5;
             float fresnelPower = 0.3;
             float reflectivity = fresnelBias + fresnelScale * pow(1.0 + dot(-edn, f_worldNormal), fresnelPower);
+            */
 
-            f_specular.rgb += texture(p_environmentMap, reflect(-edn, normalize(f_worldNormal))).rgb * reflectivity;
+            {
+                vec2 dfg = PrefilteredDFG_Karis(m_roughness, dot(wnn, edn));
+                vec3 sc = m_metalness * m_color.rgb + (1.0-m_metalness) * vec3(0.04);
+
+                f_specular.rgb += sc * (texture(p_environmentMap, reflect(-edn, normalize(f_worldNormal))).rgb * dfg.x + dfg.y);
+            }
         """.trimIndent()  else ""  }
 
         ${lights.mapIndexed { index, (node, light) ->
