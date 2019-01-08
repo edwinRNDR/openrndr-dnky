@@ -40,7 +40,7 @@ class DiffuseSpecularFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE, 
 class MaterialFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE),
         "material", ColorFormat.RGBa, ColorType.UINT8) {
     override fun generateShader(): String =
-        "o_$targetOutput = vec4(m_reflectivity, 0.0, 0.0, 0.0);"
+        "o_$targetOutput = vec4(m_metalness, m_roughness, 0.0, 0.0);"
 }
 
 class DiffuseFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE),
@@ -58,7 +58,7 @@ class SpecularFacet : ColorBufferFacetCombiner( setOf(FacetType.SPECULAR),
 class EmissiveFacet : ColorBufferFacetCombiner( setOf(FacetType.EMISSIVE),
         "emissive", ColorFormat.RGB, ColorType.FLOAT16) {
     override fun generateShader(): String =
-            "o_$targetOutput =  vec4(f_emissive.rgb, 1.0);"
+            "o_$targetOutput =  vec4(f_emission * m_color, 1.0);"
 }
 
 class PositionFacet : ColorBufferFacetCombiner(setOf(FacetType.WORLD_POSITION), "position", ColorFormat.RGB, ColorType.FLOAT16) {

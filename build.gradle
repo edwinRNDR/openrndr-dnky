@@ -4,7 +4,7 @@ plugins {
 }
 
 group 'org.openrndr.dnky'
-version '0.0.1-SNAPSHOT'
+version '0.0.2-SNAPSHOT'
 
 repositories {
     mavenLocal()
@@ -14,7 +14,7 @@ repositories {
     }
 }
 
-ext.openrndr_version = "0.3.31"
+ext.openrndr_version = "0.3.32-rc1"
 dependencies {
     compile "org.openrndr:openrndr-core:$openrndr_version"
     compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8"

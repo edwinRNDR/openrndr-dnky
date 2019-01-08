@@ -65,7 +65,7 @@ fun photographicRenderer(): PhotographicRenderer {
                 color = pr.fogColor
             }
         }
-        postSteps += postStep(TonemapUncharted2()) {
+        postSteps += postStep(TonemapAces()) {
             inputs += "fog"
             output = "ldr"
             outputFormat = ColorFormat.RGBa

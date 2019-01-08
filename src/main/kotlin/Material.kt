@@ -27,12 +27,12 @@ private fun PointLight.fs(index: Int): String = """
 |   p_lightLinearAttenuation$index * distance + p_lightQuadraticAttenuation$index * distance * distance);
 |   vec3 dpn = normalize(dp);
 |
-|   float side = dot(dpn, wnn);
-|   f_diffuse += attenuation * max(0, side) * p_lightColor$index.rgb * p_diffuse.rgb;
-|   if (side > 0.0) {
-|       float f = max(0.0, dot(reflect(-dpn, wnn), edn));
-|       f_specular += attenuation * pow(f, m_shininess) * p_lightColor$index.rgb * m_specular.rgb;
-|   }
+|   float side = dot(dpn, wnn) ;
+|   f_diffuse += attenuation * max(0, side / 3.1415) * p_lightColor$index.rgb * m_color.rgb;
+//|   if (side > 0.0) {
+//|       float f = max(0.0, dot(reflect(-dpn, wnn), edn));
+|       f_specular += attenuation * ggx(wnn, edn, dpn, 0.3, 0.0) * p_lightColor$index.rgb * m_color.rgb;
+//|   }
 }
 """.trimMargin()
 
@@ -41,10 +41,10 @@ private fun AmbientLight.fs(index: Int): String = "light += p_lightColor$index.r
 private fun DirectionalLight.fs(index: Int) = """
 |{
 |    float side = dot(-wnn, p_lightDirection$index);
-|    f_diffuse += max(0, side) * p_lightColor$index.rgb * m_diffuse.rgb;
+|    f_diffuse += max(0, side) * p_lightColor$index.rgb * m_color.rgb;
 |    if (side > 0.0) {
 |        float f = max(0.0, dot(reflect(p_lightDirection$index, wnn), edn));
-|        f_specular += pow(f, m_shininess) * p_lightColor$index.rgb * m_specular.rgb;
+|        f_specular += pow(f, m_shininess) * p_lightColor$index.rgb * m_color.rgb;
 |    }
 |}
 """.trimMargin()
@@ -53,7 +53,7 @@ private fun HemisphereLight.fs(index: Int): String = """
 |{
 |   float f = dot(wnn, p_lightDirection$index) * 0.5 + 0.5;
 |   vec3 irr = ${irradianceMap?.let { "texture(p_lightIrradianceMap$index, wnn).rgb" } ?: "vec3(1.0)"};
-|   f_diffuse += mix(p_lightDownColor$index.rgb, p_lightUpColor$index.rgb, f) * irr * m_diffuse.rgb;
+|   f_diffuse += mix(p_lightDownColor$index.rgb, p_lightUpColor$index.rgb, f) * irr * m_color.rgb;
 |}
 """.trimMargin()
 
@@ -118,10 +118,10 @@ private fun AreaLight.fs(index: Int): String = """
 |           float specDist = length(nearestSpec2D-dirSpec2D);
 |           float specFactor = exp(-specDist) * exp(-realDist*0.05) * sf; //1.0-clamp(length(nearestSpec2D-dirSpec2D)* (sf*10.0 + 1.0),0.0,1.0);
             //specFactor =1.0-clamp(length(nearestSpec2D-dirSpec2D), 0.0, 1.0);
-            f_specular += p_lightColor$index.rgb * specFactor * specAngle * m_specular.rgb;
+            f_specular += p_lightColor$index.rgb * specFactor * specAngle * m_color.rgb;
 |       }
 |   }
-    f_diffuse += m_diffuse.rgb * p_lightColor$index.rgb  * max(0.0, nDotL) * attenuation;
+    f_diffuse += m_color.rgb * p_lightColor$index.rgb  * max(0.0, nDotL) * attenuation;
 |}
 """.trimIndent()
 
@@ -151,20 +151,20 @@ private fun SpotLight.fs(index: Int): String = """
     |
     |}
 """.trimMargin() else ""}
-|   f_diffuse += attenuation * max(0, side) * p_lightColor$index.rgb * p_diffuse.rgb;
+|   f_diffuse += attenuation * max(0, side) * p_lightColor$index.rgb * p_color.rgb;
 |   if (side > 0.0) {
 |       float f = max(0.0, dot(reflect(-dpn, wnn), edn));
-|       f_specular += attenuation * pow(f, m_shininess) * p_lightColor$index.rgb * m_specular.rgb;
+|       f_specular += attenuation * pow(f, m_shininess) * p_lightColor$index.rgb * m_color.rgb;
 |   }
 }
 """.trimMargin()
 
 private fun Fog.fs(index: Int): String = """
 |{
-|    float dz = min(1.0, -v_viewPosition.z/p_fogEnd$index);
-|    f_diffuse = mix(f_diffuse, (1.0/3.0) * p_fogColor$index.rgb, dz);
-|    f_specular = mix(f_specular, (1.0/3.0) * p_fogColor$index.rgb, dz);
-|    f_emissive = mix(f_emissive, (1.0/3.0) * p_fogColor$index.rgb, dz);
+//|    float dz = min(1.0, -v_viewPosition.z/p_fogEnd$index);
+//|    f_diffuse = mix(f_diffuse, (1.0/3.0) * p_fogColor$index.rgb, dz);
+//|    f_specular = mix(f_specular, (1.0/3.0) * p_fogColor$index.rgb, dz);
+//|    f_emission = mix(f_emissive, (1.0/3.0) * p_fogColor$index.rgb, dz);
 |}
 """.trimMargin()
 
@@ -228,13 +228,11 @@ private fun Triplanar.fs(index: Int, target: TextureTarget) = """
 
 enum class TextureTarget {
     NONE,
-    DIFFUSE,
-    SPECULAR,
-    DIFFUSE_SPECULAR,
-    EMISSIVE,
+    COLOR,
+    ROUGNESS,
+    METALNESS,
+    EMISSION,
     NORMAL,
-    SHININESS,
-    REFLECTIVITY
 }
 
 class Texture(var source: TextureSource,
@@ -242,11 +240,11 @@ class Texture(var source: TextureSource,
 
 class BasicMaterial : Material {
     var environmentMap = false
-    var diffuse = ColorRGBa.WHITE
-    var specular = ColorRGBa.WHITE
-    var emissive = ColorRGBa.BLACK
-    var shininess = 1.0
-    var reflectivity = 1.0
+    var color = ColorRGBa.WHITE
+    var metalness = 0.5
+    var roughness = 1.0
+    var emission = 0.0
+
     var vertexTransform: String? = null
     var parameters = mutableMapOf<String, Any>()
     var textures = mutableListOf<Texture>()
@@ -254,13 +252,11 @@ class BasicMaterial : Material {
     override fun generateShadeStyle(context: MaterialContext): ShadeStyle {
         val needLight = needLight(context)
 
-
         val preambleFS = """
-            vec3 m_diffuse = p_diffuse.rgb;
-            vec3 m_specular = p_specular.rgb;
-            float m_reflectivity = p_reflectivity;
-            float m_shininess = p_shininess;
-            vec3 m_emissive = p_emissive.rgb;
+            vec3 m_color = p_color.rgb;
+            float m_roughness = p_roughness;
+            float m_metalness = p_metalness;
+            float m_emission = p_emission;
             vec3 m_normal = vec3(0.0, 0.0, 1.0);
 
             vec3 f_worldNormal = v_worldNormal;
@@ -278,13 +274,11 @@ class BasicMaterial : Material {
             } + textures.mapIndexed { index, texture ->
                 when (texture.target) {
                     TextureTarget.NONE -> ""
-                    TextureTarget.DIFFUSE -> "m_diffuse.rgb *= tex$index.rgb;"
-                    TextureTarget.DIFFUSE_SPECULAR -> "m_diffuse.rgb *= tex$index.rgb; m_specular.rgb *= tex$index.rgb;"
-                    TextureTarget.SPECULAR -> "m_specular.rgb *= tex$index.rgb;"
-                    TextureTarget.EMISSIVE -> "m_emissive.rgb += tex$index.rgb;"
+                    TextureTarget.COLOR -> "m_color.rgb *= tex$index.rgb;"
+                    TextureTarget.METALNESS -> "m_metalness = tex$index.r;"
+                    TextureTarget.ROUGNESS -> "m_roughness = tex$index.r;"
+                    TextureTarget.EMISSION -> "m_emission += tex$index.r;"
                     TextureTarget.NORMAL -> "f_worldNormal = normalize((u_modelNormalMatrix * vec4(tex$index.xyz,0.0)).xyz); "
-                    TextureTarget.SHININESS -> "m_shininess *= tex$index.r;"
-                    TextureTarget.REFLECTIVITY -> "m_reflectivity *= tex$index.r;"
                 }
             }).joinToString("\n")
         } else ""
@@ -293,10 +287,11 @@ class BasicMaterial : Material {
         val lightFS = if (needLight) """
         vec3 f_diffuse = vec3(0.0);
         vec3 f_specular = vec3(0.0);
-        vec3 f_emissive = m_emissive;
+        float f_emission = m_emission;
         vec3 wnn = normalize(f_worldNormal);
         vec3 ep = (p_viewMatrixInverse * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-        vec3 edn = normalize(ep - v_worldPosition);
+        vec3 ed = ep - v_worldPosition;
+        vec3 edn = normalize(ed);
 
         ${if(environmentMap && context.meshCubemaps.isNotEmpty()) """
             float fresnelBias = 0.1;
@@ -342,6 +337,7 @@ class BasicMaterial : Material {
             |$shaderLinePlaneIntersect
             |$shaderProjectOnPlane
             |$shaderSideOfPlane
+            |$shaderGGX
             """.trimMargin()
             this.suppressDefaultOutput = true
             this.vertexTransform = this@BasicMaterial.vertexTransform
@@ -372,11 +368,10 @@ class BasicMaterial : Material {
             }
         }
 
-        shadeStyle.parameter("emissive", emissive)
-        shadeStyle.parameter("specular", specular)
-        shadeStyle.parameter("diffuse", diffuse)
-        shadeStyle.parameter("shininess", shininess)
-        shadeStyle.parameter("reflectivity", reflectivity)
+        shadeStyle.parameter("emission", emission)
+        shadeStyle.parameter("color", color)
+        shadeStyle.parameter("metalness", metalness)
+        shadeStyle.parameter("roughness", roughness)
 
         parameters.forEach { k, v ->
             when (v) {
@@ -480,7 +475,7 @@ private inline fun <reified T : Material> MeshBase.material(init: T.() -> Unit):
 }
 
 fun BasicMaterial.texture(init: Texture.() -> Unit): Texture {
-    val texture = Texture(DummySource, target = TextureTarget.DIFFUSE)
+    val texture = Texture(DummySource, target = TextureTarget.COLOR)
     texture.init()
     textures.add(texture)
     return texture

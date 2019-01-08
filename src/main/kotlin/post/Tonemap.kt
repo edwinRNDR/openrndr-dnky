@@ -13,3 +13,14 @@ class TonemapUncharted2 : Filter(Shader.createFromCode(
         exposureBias = 1.0
     }
 }
+
+class TonemapAces : Filter(Shader.createFromCode(
+        Filter.filterVertexCode,
+        filterFragmentCode("tonemap-aces.frag"))) {
+
+    var exposureBias: Double by parameters
+
+    init {
+        exposureBias = 1.0
+    }
+}
