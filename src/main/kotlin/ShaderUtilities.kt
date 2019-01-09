@@ -26,14 +26,14 @@ L - world light pos - world vertex position
  */
 val shaderGGX = """
 
-float Fd_Burley(float linearRoughness, float NoV, float NoL, float LoH) {
-    // Burley 2012, "Physically-Based Shading at Disney"
-    float f90 = 0.5 + 2.0 * linearRoughness * LoH * LoH;
-    float lightScatter = F_Schlick(1.0, f90, NoL);
-    float viewScatter  = F_Schlick(1.0, f90, NoV);
-    return lightScatter * viewScatter * (1.0 / PI);
-}
-
+//float Fd_Burley(float linearRoughness, float NoV, float NoL, float LoH) {
+//    // Burley 2012, "Physically-Based Shading at Disney"
+//    float f90 = 0.5 + 2.0 * linearRoughness * LoH * LoH;
+//    float lightScatter = F_Schlick(1.0, f90, NoL);
+//    float viewScatter  = F_Schlick(1.0, f90, NoV);
+//    return lightScatter * viewScatter * (1.0 / PI);
+//}
+//
 vec2 PrefilteredDFG_Karis(float roughness, float NoV) {
     //https://www.shadertoy.com/view/XlKSDR
     // Karis 2014, "Physically Based Material on Mobile"

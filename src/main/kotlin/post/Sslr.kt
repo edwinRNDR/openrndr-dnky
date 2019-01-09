@@ -10,6 +10,7 @@ class Sslr : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmen
     var positions: Int by parameters
     var normals: Int by parameters
     var material: Int by parameters
+    var baseColors: Int by parameters
 
     var jitterOriginGain: Double by parameters
     var iterationLimit: Int by parameters
@@ -32,4 +33,24 @@ class Sslr : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmen
         gain = 1.0
         borderWidth = 130.0
     }
+}
+
+class SslrCombiner : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmentCode("sslr-combiner.frag"))) {
+
+    var colors: Int by parameters
+    var reflections: Int by parameters
+    var positions: Int by parameters
+    var normals: Int by parameters
+    var materials: Int by parameters
+    var baseColors: Int by parameters
+
+    init {
+        colors = 0
+        reflections = 1
+        positions = 2
+        normals = 3
+        materials = 4
+        baseColors = 5
+    }
+
 }

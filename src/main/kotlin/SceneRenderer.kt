@@ -19,7 +19,8 @@ enum class FacetType(val shaderFacet: String) {
     VIEW_NORMAL("f_viewNormal"),
     SPECULAR("f_specular"),
     DIFFUSE("f_diffuse"),
-    EMISSIVE("f_emission")
+    EMISSIVE("f_emission"),
+    COLOR("m_color"),
 }
 
 abstract class FacetCombiner(val facets: Set<FacetType>, val targetOutput: String) {
@@ -40,7 +41,13 @@ class DiffuseSpecularFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE, 
 class MaterialFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE),
         "material", ColorFormat.RGBa, ColorType.UINT8) {
     override fun generateShader(): String =
-        "o_$targetOutput = vec4(m_metalness, m_roughness, 0.0, 0.0);"
+        "o_$targetOutput = vec4(m_metalness, m_roughness, m_f0, 0.0);"
+}
+
+class BaseColorFacet : ColorBufferFacetCombiner( setOf(FacetType.COLOR),
+        "baseColor", ColorFormat.RGB, ColorType.UINT8) {
+    override fun generateShader(): String = "o_$targetOutput = vec4(m_color.rgb, 1.0);"
+
 }
 
 class DiffuseFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE),

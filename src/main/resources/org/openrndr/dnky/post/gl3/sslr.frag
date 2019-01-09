@@ -27,6 +27,7 @@ float distanceSquared(vec2 a, vec2 b) {
     return dot(d,d);
 }
 
+
 #define HASHSCALE 443.8975
 vec2 hash22(vec2 p) {
 	vec3 p3 = fract(vec3(p.xyx) * HASHSCALE);
@@ -166,7 +167,8 @@ void main() {
     vec3 hitPoint = vec3(0.0, 0.0, 0.0);
 
     vec2 jitter = abs(hash22(v_texCoord0));
-    float reflectivity = texture(material, v_texCoord0).r;
+    vec4 materialData = texture(material, v_texCoord0);
+
 
     vec2 ts = vec2(textureSize(normals, 0).xy);
     vec3 viewNormal = normalize(texture(normals, v_texCoord0).xyz);// + (texture(noise, v_texCoord0*0.1).xyz - 0.5) * 0.0;
@@ -174,7 +176,7 @@ void main() {
     vec3 reflected = normalize(reflect(normalize(viewPos), normalize(viewNormal)));
 
     float frontalFade = clamp(-reflected.z,0, 1);
-    if ( reflectivity > 0 ) {
+    if ( true ) {
         bool hit = traceScreenSpaceRay1(
             viewPos + viewNormal*(1.0),
             reflected,
@@ -201,7 +203,7 @@ void main() {
 
         vec4 reflectedColor = texelFetch(colors, ivec2(p.xy*k), 0);
         float hitFade = hit? 1.0: 0.0;
-        o_color.rgb = texture(colors, v_texCoord0).rgb + (reflectivity * reflectedColor.rgb * hitFade * frontalFade * distanceFade * borderFade * gain);
+        o_color.rgb = 0.0 * texture(colors, v_texCoord0).rgb + (1.0 * reflectedColor.rgb * hitFade * frontalFade * distanceFade * borderFade * gain);
         o_color.a = 1.0;
     } else {
         o_color =  texture(colors, v_texCoord0).rgba;

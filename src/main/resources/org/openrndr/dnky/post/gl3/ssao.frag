@@ -68,7 +68,7 @@ void main() {
     }
     occlusion = 1.0 - (occlusion/64.0);
 
-    float f = occlusion;
+    float f = occlusion * occlusion;
 
     o_color.rgba = vec4(f, f, f, 1.0);
  }

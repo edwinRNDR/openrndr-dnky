@@ -31,7 +31,7 @@ private fun PointLight.fs(index: Int): String = """
 |   f_diffuse += attenuation * max(0, side / 3.1415) * p_lightColor$index.rgb * m_color.rgb;
 //|   if (side > 0.0) {
 //|       float f = max(0.0, dot(reflect(-dpn, wnn), edn));
-|       f_specular += attenuation * ggx(wnn, edn, dpn, m_roughness, 0.5) * p_lightColor$index.rgb * m_color.rgb;
+|       f_specular += attenuation * ggx(wnn, edn, dpn, m_roughness, m_f0) * p_lightColor$index.rgb * m_color.rgb;
 //|   }
 }
 """.trimMargin()
@@ -257,6 +257,7 @@ class BasicMaterial : Material {
 
         val preambleFS = """
             vec3 m_color = p_color.rgb;
+            float m_f0 = 0.5;
             float m_roughness = p_roughness;
             float m_metalness = p_metalness;
             float m_emission = p_emission;

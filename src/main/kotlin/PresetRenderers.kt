@@ -29,6 +29,7 @@ fun photographicRenderer(): PhotographicRenderer {
                 DiffuseSpecularFacet(),
                 EmissiveFacet(),
                 MaterialFacet(),
+                BaseColorFacet(),
                 ViewPositionFacet(),
                 ViewNormalFacet()
         ))
@@ -39,8 +40,26 @@ fun photographicRenderer(): PhotographicRenderer {
 //        postSteps += PostStep(1.0, PositionToCoc(), listOf("reflection", "viewPosition"), "cocImage", ColorFormat.RGBa, ColorType.FLOAT16) {
 //
 //        }
+        postSteps += PostStep(1.0, SslrCombiner(),
+                listOf("combined", "reflection", "viewPosition", "viewNormal", "material", "baseColor" ),
+                "reflection-combined", ColorFormat.RGB, ColorType.FLOAT16)
+
+
+        postSteps += postStep(LinearFog()) {
+            inputs += "reflection-combined"
+            inputs += "viewPosition"
+            output = "fog"
+            outputFormat = ColorFormat.RGBa
+            outputType = ColorType.FLOAT16
+            update = {
+                end = pr.fogEnd
+                start = pr.fogStart
+                color = pr.fogColor
+            }
+        }
+
         postSteps += postStep(PositionToCoc()) {
-            inputs += "reflection"
+            inputs += "fog"
             inputs += "viewPosition"
             output = "cocImage"
             outputFormat = ColorFormat.RGBa
@@ -53,20 +72,9 @@ fun photographicRenderer(): PhotographicRenderer {
         }
 
         postSteps += PostStep(1.0, HexDof(), listOf("cocImage"), "dof", ColorFormat.RGBa, ColorType.FLOAT16)
-        postSteps += postStep(LinearFog()) {
-            inputs += "dof"
-            inputs += "viewPosition"
-            output = "fog"
-            outputFormat = ColorFormat.RGBa
-            outputType = ColorType.FLOAT16
-            update = {
-                end = pr.fogEnd
-                start = pr.fogStart
-                color = pr.fogColor
-            }
-        }
+
         postSteps += postStep(TonemapAces()) {
-            inputs += "fog"
+            inputs += "dof"
             output = "ldr"
             outputFormat = ColorFormat.RGBa
             outputType = ColorType.UINT8
