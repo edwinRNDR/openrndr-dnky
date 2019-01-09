@@ -42,9 +42,9 @@ private fun DirectionalLight.fs(index: Int) = """
 |    float NoL = clamp(dot(N, L), 0.0, 1.0);
 |    float LoH = clamp(dot(L, H), 0.0, 1.0);
 |    float NoH = clamp(dot(N, H), 0.0, 1.0);
-|    f_diffuse += NoL * attenuation * Fd_Burley(m_roughness * m_roughness, dot(N, V), NoL, LoH) * p_lightColor$index.rgb * m_color.rgb ;
+|    f_diffuse += NoL * attenuation * Fd_Burley(m_roughness * m_roughness, NoV, NoL, LoH) * p_lightColor$index.rgb * m_color.rgb ;
 |    float Dg = D_GGX(m_roughness * m_roughness, NoH, H);
-|    float Vs = V_SmithGGXCorrelated(m_roughness * m_roughness, dot(N,V), NoL);
+|    float Vs = V_SmithGGXCorrelated(m_roughness * m_roughness, NoV, NoL);
 |    vec3 F = F_Schlick(m_color * (m_metalness) + 0.04 * (1.0-m_metalness), LoH);
 |    vec3 Fr = (Dg * Vs) * F;
 |    f_specular += NoL * attenuation * Fr * p_lightColor$index.rgb;
@@ -142,9 +142,9 @@ private fun SpotLight.fs(index: Int): String = """
 |   float NoL = clamp(dot(N, L), 0.0, 1.0);
 |   float LoH = clamp(dot(L, H), 0.0, 1.0);
 |   float NoH = clamp(dot(N, H), 0.0, 1.0);
-|   f_diffuse += NoL * attenuation * Fd_Burley(m_roughness * m_roughness, dot(N, V), NoL, LoH) * p_lightColor$index.rgb * m_color.rgb ;
+|   f_diffuse += NoL * attenuation * Fd_Burley(m_roughness * m_roughness, NoV, NoL, LoH) * p_lightColor$index.rgb * m_color.rgb ;
 |   float Dg = D_GGX(m_roughness * m_roughness, NoH, H);
-|   float Vs = V_SmithGGXCorrelated(m_roughness * m_roughness, dot(N,V), NoL);
+|   float Vs = V_SmithGGXCorrelated(m_roughness * m_roughness, NoV, NoL);
 |   vec3 F = F_Schlick(m_color * (m_metalness) + 0.04 * (1.0-m_metalness), LoH);
 |   vec3 Fr = (Dg * Vs) * F;
 |   f_specular += NoL * attenuation * Fr * p_lightColor$index.rgb;
@@ -286,7 +286,7 @@ class BasicMaterial : Material {
         vec3 ep = (p_viewMatrixInverse * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         vec3 Vr = ep - v_worldPosition;
         vec3 V = normalize(Vr);
-        float NoV = abs(dot(n, v)) + 1e-5;
+        float NoV = abs(dot(N, V)) + 1e-5;
 
         ${if(environmentMap && context.meshCubemaps.isNotEmpty()) """
             /*
@@ -297,7 +297,7 @@ class BasicMaterial : Material {
             */
 
             {
-                vec2 dfg = PrefilteredDFG_Karis(m_roughness, dot(N, V));
+                vec2 dfg = PrefilteredDFG_Karis(m_roughness, NoV);
                 vec3 sc = m_metalness * m_color.rgb + (1.0-m_metalness) * vec3(0.04);
 
                 f_specular.rgb += sc * (texture(p_environmentMap, reflect(-V, normalize(f_worldNormal))).rgb * dfg.x + dfg.y);
