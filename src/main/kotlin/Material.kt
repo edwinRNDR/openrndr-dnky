@@ -21,18 +21,15 @@ interface Material {
 
 private fun PointLight.fs(index: Int): String = """
 |{
-|   vec3 dp = p_lightPosition$index - v_worldPosition;
-|   float distance = length(dp);
+|   vec3 Lr = p_lightPosition$index - v_worldPosition;
+|   float distance = length(Lr);
 |   float attenuation = 1.0 / (p_lightConstantAttenuation$index +
 |   p_lightLinearAttenuation$index * distance + p_lightQuadraticAttenuation$index * distance * distance);
-|   vec3 dpn = normalize(dp);
+|   vec3 L = normalize(Lr);
 |
-|   float side = dot(dpn, wnn) ;
+|   float side = dot(L, N) ;
 |   f_diffuse += attenuation * max(0, side / 3.1415) * p_lightColor$index.rgb * m_color.rgb;
-//|   if (side > 0.0) {
-//|       float f = max(0.0, dot(reflect(-dpn, wnn), edn));
-|       f_specular += attenuation * ggx(wnn, edn, dpn, m_roughness, m_f0) * p_lightColor$index.rgb * m_color.rgb;
-//|   }
+|   f_specular += attenuation * ggx(N, V, L, m_roughness, m_f0) * p_lightColor$index.rgb * m_color.rgb;
 }
 """.trimMargin()
 
@@ -40,22 +37,24 @@ private fun AmbientLight.fs(index: Int): String = "light += p_lightColor$index.r
 
 private fun DirectionalLight.fs(index: Int) = """
 |{
-|    float side = dot(-wnn, p_lightDirection$index);
-|    vec3 dpn = p_lightDirection$index;
-|
-|    f_diffuse += max(0, side) * p_lightColor$index.rgb * m_color.rgb;
-|    if (side > 0.0) {
-|        float f = max(0.0, dot(reflect(p_lightDirection$index, wnn), edn));
-|        f_specular += ggx(wnn, edn, dpn, m_roughness, 0.0) * p_lightColor$index.rgb * m_color.rgb;
-//|        f_specular += pow(f, m_shininess) * p_lightColor$index.rgb * m_color.rgb;
-|    }
+|    vec3 L = normalize(p_lightDirection$index);
+|    vec3 H = normalize(V + L);
+|    float NoL = clamp(dot(N, L), 0.0, 1.0);
+|    float LoH = clamp(dot(L, H), 0.0, 1.0);
+|    float NoH = clamp(dot(N, H), 0.0, 1.0);
+|    f_diffuse += NoL * attenuation * Fd_Burley(m_roughness * m_roughness, dot(N, V), NoL, LoH) * p_lightColor$index.rgb * m_color.rgb ;
+|    float Dg = D_GGX(m_roughness * m_roughness, NoH, H);
+|    float Vs = V_SmithGGXCorrelated(m_roughness * m_roughness, dot(N,V), NoL);
+|    vec3 F = F_Schlick(m_color * (m_metalness) + 0.04 * (1.0-m_metalness), LoH);
+|    vec3 Fr = (Dg * Vs) * F;
+|    f_specular += NoL * attenuation * Fr * p_lightColor$index.rgb;
 |}
 """.trimMargin()
 
 private fun HemisphereLight.fs(index: Int): String = """
 |{
-|   float f = dot(wnn, p_lightDirection$index) * 0.5 + 0.5;
-|   vec3 irr = ${irradianceMap?.let { "texture(p_lightIrradianceMap$index, wnn).rgb" } ?: "vec3(1.0)"};
+|   float f = dot(N, p_lightDirection$index) * 0.5 + 0.5;
+|   vec3 irr = ${irradianceMap?.let { "texture(p_lightIrradianceMap$index, N).rgb" } ?: "vec3(1.0)"};
 |   f_diffuse += mix(p_lightDownColor$index.rgb, p_lightUpColor$index.rgb, f) * irr * m_color.rgb;
 |}
 """.trimMargin()
@@ -72,49 +71,35 @@ private fun AreaLight.fs(index: Int): String = """
             ${if(distanceField!=null) """
                 vec2 dtc = nearest2D / (vec2(width, height) * 2.0) + vec2(0.5);
                 vec3 ddir = texture(p_lightDistanceField$index, dtc).rgb;
-
                 ddir.xy /= textureSize(p_lightDistanceField$index, 0);
-
                 if (ddir.z < 0.5) {
                     nearest2D += ddir.xy * vec2(width, height);
                 }
-
             """.trimIndent() else ""}
-
-
-
-
 |   vec3 nearestPointInside = p_lightPosition$index + (p_lightTangent$index*nearest2D.x+up*nearest2D.y);
 |   float dist = distance(v_worldPosition, nearestPointInside);
 |   vec3 L = normalize(nearestPointInside - v_worldPosition);
 |   float attenuation = 1.0 / (1.0 + dist*0.1);
 |   float nDotL = dot(p_lightDirection$index, -L);
 |   if (nDotL > 0.0 && sideOfPlane(v_worldPosition, p_lightPosition$index, p_lightDirection$index) == 1) {
-|       vec3 R = reflect(edn, wnn);
+|       vec3 R = reflect(V, N);
 |       vec3 E = linePlaneIntersect(v_worldPosition ,R, p_lightPosition$index, p_lightDirection$index);
 |       float specAngle = dot(R, p_lightDirection$index);
 |       if (specAngle > 0.0) {
 |           vec3 dirSpec = E - p_lightPosition$index;
-|
 |           vec2 dirSpec2D = vec2(dot(dirSpec, p_lightTangent$index), dot(dirSpec,up));
             float eps = 0.0;
 |           vec2 nearestSpec2D = vec2(clamp( dirSpec2D.x,-width + eps,width-eps  ),clamp(  dirSpec2D.y,-height + eps ,height - eps));
             ${if(distanceField!=null) """
                 vec2 tc = nearestSpec2D / (vec2(width, height) * 2.0) + vec2(0.5);
-
                 vec3 dir = texture(p_lightDistanceField$index, tc).rgb;
-
                 dir.xy /= textureSize(p_lightDistanceField$index, 0);
-
                 if (dir.z == 0.0) {
                     nearestSpec2D += dir.xy * vec2(width, -height);
                 }
 
             """.trimIndent() else ""}
-
 |           vec3 nearestSpec3D = p_lightPosition$index + (p_lightTangent$index*nearestSpec2D.x+up*nearestSpec2D.y);
-|
-|
 |           vec3 toLight = nearestSpec3D-v_worldPosition;
 |           float sf = max(0.0, dot(-normalize(toLight), p_lightDirection$index));
 |           float realDist = length(toLight);
@@ -131,15 +116,15 @@ private fun AreaLight.fs(index: Int): String = """
 
 private fun SpotLight.fs(index: Int): String = """
 |{
-|   vec3 dp = p_lightPosition$index - v_worldPosition;
-|   float distance = length(dp);
+|   vec3 Lr = p_lightPosition$index - v_worldPosition;
+|   float distance = length(Lr);
 |   float attenuation = 1.0 / (p_lightConstantAttenuation$index +
 |   p_lightLinearAttenuation$index * distance + p_lightQuadraticAttenuation$index * distance * distance);
 |   attenuation = 1.0;
-|   vec3 dpn = normalize(dp);
+|   vec3 L = normalize(Lr);
 |
-|   float side = dot(dpn, wnn);
-|   float hit = max(dot(-dpn, p_lightDirection$index), 0.0);
+|   float side = dot(L, N);
+|   float hit = max(dot(-L, p_lightDirection$index), 0.0);
 |   float falloff = clamp((hit - p_lightOuterCos$index) / (p_lightInnerCos$index - p_lightOuterCos$index), 0.0, 1.0);
 |   attenuation *= falloff;
 |   ${if (shadows) """
@@ -151,20 +136,25 @@ private fun SpotLight.fs(index: Int): String = """
     |   float closestDepth = smz.x;
     |   float shadow = (currentDepth - 0.005)  > closestDepth  ? 0.0 : 1.0;
     |   attenuation *= shadow;
-    |
     |}
 """.trimMargin() else ""}
-|   f_diffuse += attenuation * max(0, side) / 3.1415 * p_lightColor$index.rgb * p_color.rgb;
-
-|       float f = max(0.0, dot(reflect(-dpn, wnn), edn));
-|       f_specular += attenuation * ggx(wnn, edn, dpn, m_roughness, 0.1) * p_lightColor$index.rgb * m_color.rgb;
-
+|   vec3 H = normalize(V + L);
+|   float NoL = clamp(dot(N, L), 0.0, 1.0);
+|   float LoH = clamp(dot(L, H), 0.0, 1.0);
+|   float NoH = clamp(dot(N, H), 0.0, 1.0);
+|   f_diffuse += NoL * attenuation * Fd_Burley(m_roughness * m_roughness, dot(N, V), NoL, LoH) * p_lightColor$index.rgb * m_color.rgb ;
+|   float Dg = D_GGX(m_roughness * m_roughness, NoH, H);
+|   float Vs = V_SmithGGXCorrelated(m_roughness * m_roughness, dot(N,V), NoL);
+|   vec3 F = F_Schlick(m_color * (m_metalness) + 0.04 * (1.0-m_metalness), LoH);
+|   vec3 Fr = (Dg * Vs) * F;
+|   f_specular += NoL * attenuation * Fr * p_lightColor$index.rgb;
 }
 """.trimMargin()
 
 private fun Fog.fs(index: Int): String = """
 |{
-//|    float dz = min(1.0, -v_viewPosition.z/p_fogEnd$index);
+    float dz = min(1.0, -v_viewPosition.z/p_fogEnd$index);
+    f_fog = vec4(p_fogColor$index.rgb, dz);
 //|    f_diffuse = mix(f_diffuse, (1.0/3.0) * p_fogColor$index.rgb, dz);
 //|    f_specular = mix(f_specular, (1.0/3.0) * p_fogColor$index.rgb, dz);
 //|    f_emission = mix(f_emissive, (1.0/3.0) * p_fogColor$index.rgb, dz);
@@ -262,7 +252,7 @@ class BasicMaterial : Material {
             float m_metalness = p_metalness;
             float m_emission = p_emission;
             vec3 m_normal = vec3(0.0, 0.0, 1.0);
-
+            vec4 f_fog = vec4(0.0, 0.0, 0.0, 0.0);
             vec3 f_worldNormal = v_worldNormal;
         """.trimIndent()
 
@@ -292,25 +282,25 @@ class BasicMaterial : Material {
         vec3 f_diffuse = vec3(0.0);
         vec3 f_specular = vec3(0.0);
         float f_emission = m_emission;
-        vec3 wnn = normalize(f_worldNormal);
+        vec3 N = normalize(f_worldNormal);
         vec3 ep = (p_viewMatrixInverse * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-        vec3 ed = ep - v_worldPosition;
-        vec3 edn = normalize(ed);
+        vec3 Vr = ep - v_worldPosition;
+        vec3 V = normalize(Vr);
+        float NoV = abs(dot(n, v)) + 1e-5;
 
         ${if(environmentMap && context.meshCubemaps.isNotEmpty()) """
-
             /*
             float fresnelBias = 0.1;
             float fresnelScale = 0.5;
             float fresnelPower = 0.3;
-            float reflectivity = fresnelBias + fresnelScale * pow(1.0 + dot(-edn, f_worldNormal), fresnelPower);
+            float reflectivity = fresnelBias + fresnelScale * pow(1.0 + dot(-V, f_worldNormal), fresnelPower);
             */
 
             {
-                vec2 dfg = PrefilteredDFG_Karis(m_roughness, dot(wnn, edn));
+                vec2 dfg = PrefilteredDFG_Karis(m_roughness, dot(N, V));
                 vec3 sc = m_metalness * m_color.rgb + (1.0-m_metalness) * vec3(0.04);
 
-                f_specular.rgb += sc * (texture(p_environmentMap, reflect(-edn, normalize(f_worldNormal))).rgb * dfg.x + dfg.y);
+                f_specular.rgb += sc * (texture(p_environmentMap, reflect(-V, normalize(f_worldNormal))).rgb * dfg.x + dfg.y);
             }
         """.trimIndent()  else ""  }
 
@@ -330,10 +320,8 @@ class BasicMaterial : Material {
             fog.fs(index)
         }.joinToString("\n")}
 
-        ${context.pass.combiners.joinToString("\n") {
-            it.generateShader()
-        }
-        }
+
+
     """.trimIndent() else ""
 
         val rt = RenderTarget.active
