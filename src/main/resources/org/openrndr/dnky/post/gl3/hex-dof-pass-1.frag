@@ -51,7 +51,7 @@ vec4 BlurTexture(vec4 org, sampler2D tex, vec2 uv, vec2 direction) {
     if (blurAmount > 0) {
         return (finalColor / blurAmount);
     } else {
-        return vec4(1.0, 0.0, 0.0, 1.0);
+        return texture(tex, uv);
     }
 }
 

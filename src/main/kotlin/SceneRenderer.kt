@@ -65,7 +65,7 @@ class SpecularFacet : ColorBufferFacetCombiner( setOf(FacetType.SPECULAR),
 class EmissiveFacet : ColorBufferFacetCombiner( setOf(FacetType.EMISSIVE),
         "emissive", ColorFormat.RGB, ColorType.FLOAT16) {
     override fun generateShader(): String =
-            "o_$targetOutput =  vec4(f_emission * m_color, 1.0);"
+            "o_$targetOutput =  vec4(f_emission, 1.0);"
 }
 
 class PositionFacet : ColorBufferFacetCombiner(setOf(FacetType.WORLD_POSITION), "position", ColorFormat.RGB, ColorType.FLOAT16) {
@@ -90,7 +90,7 @@ class ClipPositionFacet : ColorBufferFacetCombiner(setOf(FacetType.CLIP_POSITION
 
 class LDRColorFacet : ColorBufferFacetCombiner(setOf(FacetType.DIFFUSE, FacetType.SPECULAR), "color", ColorFormat.RGBa, ColorType.UINT8) {
     override fun generateShader() = """
-    vec3 oofinalColor =  (f_diffuse.rgb + f_specular.rgb + f_emission * m_color.rgb) * (1.0 - f_fog.a) + f_fog.rgb * f_fog.a;
+    vec3 oofinalColor =  (f_diffuse.rgb + f_specular.rgb + f_emission.rgb) * (1.0 - f_fog.a) + f_fog.rgb * f_fog.a;
     o_$targetOutput.rgba = pow(vec4(oofinalColor, 1.0), vec4(1.0));
     """
 }

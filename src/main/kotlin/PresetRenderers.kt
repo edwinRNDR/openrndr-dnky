@@ -10,8 +10,10 @@ class PhotographicRenderer(val renderer: SceneRenderer) {
     var focalPlane = 100.0
     var aperture = 1.0
 
-    var fogStart = 50.0
-    var fogEnd = 150.0
+//    var fogStart = 50.0
+//    var fogEnd = 150.0
+    var fogDensity = 0.01
+    var fogPower = 1.0
     var fogColor = ColorRGBa.GRAY
 }
 
@@ -45,15 +47,15 @@ fun photographicRenderer(): PhotographicRenderer {
                 "reflection-combined", ColorFormat.RGB, ColorType.FLOAT16)
 
 
-        postSteps += postStep(LinearFog()) {
+        postSteps += postStep(ExponentialFog()) {
             inputs += "reflection-combined"
             inputs += "viewPosition"
             output = "fog"
             outputFormat = ColorFormat.RGBa
             outputType = ColorType.FLOAT16
             update = {
-                end = pr.fogEnd
-                start = pr.fogStart
+                density = pr.fogDensity
+                power = pr.fogPower
                 color = pr.fogColor
             }
         }
@@ -82,6 +84,8 @@ fun photographicRenderer(): PhotographicRenderer {
                 exposureBias = pr.exposure
             }
         }
+
+        postSteps += PostStep(1.0, FXAA(), listOf("ldr"), "aa", ColorFormat.RGBa, ColorType.UINT8)
     }
     return pr
 }

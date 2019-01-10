@@ -153,11 +153,8 @@ private fun SpotLight.fs(index: Int): String = """
 
 private fun Fog.fs(index: Int): String = """
 |{
-    float dz = min(1.0, -v_viewPosition.z/p_fogEnd$index);
-    f_fog = vec4(p_fogColor$index.rgb, dz);
-//|    f_diffuse = mix(f_diffuse, (1.0/3.0) * p_fogColor$index.rgb, dz);
-//|    f_specular = mix(f_specular, (1.0/3.0) * p_fogColor$index.rgb, dz);
-//|    f_emission = mix(f_emissive, (1.0/3.0) * p_fogColor$index.rgb, dz);
+|    float dz = min(1.0, -v_viewPosition.z/p_fogEnd$index);
+|    f_fog = vec4(p_fogColor$index.rgb, dz);
 |}
 """.trimMargin()
 
@@ -236,7 +233,7 @@ class BasicMaterial : Material {
     var color = ColorRGBa.WHITE
     var metalness = 0.5
     var roughness = 1.0
-    var emission = 0.0
+    var emission = ColorRGBa.BLACK
 
     var vertexTransform: String? = null
     var parameters = mutableMapOf<String, Any>()
@@ -250,7 +247,7 @@ class BasicMaterial : Material {
             float m_f0 = 0.5;
             float m_roughness = p_roughness;
             float m_metalness = p_metalness;
-            float m_emission = p_emission;
+            vec3 m_emission = p_emission.rgb;
             vec3 m_normal = vec3(0.0, 0.0, 1.0);
             vec4 f_fog = vec4(0.0, 0.0, 0.0, 0.0);
             vec3 f_worldNormal = v_worldNormal;
@@ -271,7 +268,7 @@ class BasicMaterial : Material {
                     TextureTarget.COLOR -> "m_color.rgb *= tex$index.rgb;"
                     TextureTarget.METALNESS -> "m_metalness = tex$index.r;"
                     TextureTarget.ROUGNESS -> "m_roughness = tex$index.r;"
-                    TextureTarget.EMISSION -> "m_emission += tex$index.r;"
+                    TextureTarget.EMISSION -> "m_emission += tex$index.rgb;"
                     TextureTarget.NORMAL -> "f_worldNormal = normalize((u_modelNormalMatrix * vec4(tex$index.xyz,0.0)).xyz); "
                 }
             }).joinToString("\n")
@@ -281,7 +278,7 @@ class BasicMaterial : Material {
         val lightFS = if (needLight) """
         vec3 f_diffuse = vec3(0.0);
         vec3 f_specular = vec3(0.0);
-        float f_emission = m_emission;
+        vec3 f_emission = m_emission;
         vec3 N = normalize(f_worldNormal);
         vec3 ep = (p_viewMatrixInverse * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         vec3 Vr = ep - v_worldPosition;

@@ -79,6 +79,8 @@ class PositionToCoc : Filter(Shader.createFromCode(Filter.filterVertexCode, filt
 
     var position: Int by parameters
 
+    var near: Boolean by parameters
+
     var aberrationConstant: Double by parameters
     var aberrationLinear: Double by parameters
 
@@ -86,11 +88,12 @@ class PositionToCoc : Filter(Shader.createFromCode(Filter.filterVertexCode, filt
     var aberrationBlendLinear: Double by parameters
 
     init {
-        minCoc = 2.0
+        minCoc = 1.1
         maxCoc = 20.0
         position = 1
         exposure = 1.0
 
+        near = false
         focalPlane = 4.0
         aperture = 1.0
         aberrationConstant = 1.0

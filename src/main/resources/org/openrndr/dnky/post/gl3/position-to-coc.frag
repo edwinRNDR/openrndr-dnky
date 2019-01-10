@@ -18,11 +18,13 @@ uniform float aberrationLinear;
 uniform float aberrationBlendConstant;
 uniform float aberrationBlendLinear;
 
+uniform bool near;
 
 float coc(vec2 uv) {
     float eyeZ = -texture(position, uv).z;
     float a = aperture;
-    float size = a * abs(1.0 - focalPlane/eyeZ);
+    float f = 1.0 - focalPlane/eyeZ;
+    float size = a * ( near? abs(f) : max(0.0, f) ) ;
     size = floor(clamp(size, minCoc, maxCoc ));
     return size;
 }
