@@ -134,7 +134,7 @@ private fun SpotLight.fs(index: Int): String = """
     |   vec3 smz = texture(p_lightShadowMap$index, lightProj.xy).rgb;
     |   float currentDepth = lightProj.z;
     |   float closestDepth = smz.x;
-    |   float shadow = (currentDepth - 0.005)  > closestDepth  ? 0.0 : 1.0;
+    |   float shadow = (currentDepth - 0.0004)  > closestDepth  ? 0.0 : 1.0;
     |   attenuation *= shadow;
     |}
 """.trimMargin() else ""}

@@ -133,6 +133,8 @@ class SceneRenderer {
         drawer.depthWrite = true
         drawer.depthTestPass = DepthTestPass.LESS_OR_EQUAL
 
+        drawer.cullTestPass = CullTestPass.FRONT
+
         scene.updateFunctions.forEach {
             it()
         }
@@ -149,6 +151,7 @@ class SceneRenderer {
         val instancedMeshes = scene.root.findContent { this as? InstancedMesh }
         val environmentMapMeshes = meshes.filter { (it.content.material as? BasicMaterial)?.environmentMap == true }
 
+        // -- render shadow maps
         run {
             val pass = LightPass
             val materialContext = MaterialContext(pass, lights, fogs, shadowLightTargets, emptyMap())
@@ -161,11 +164,14 @@ class SceneRenderer {
                 target.clearDepth(depth = 1.0)
                 val look = shadowLight.view(it.node)
                 drawer.isolatedWithTarget(target) {
+
                     drawer.projection = shadowLight.projection(target)
                     drawer.view = look
                     drawer.model = Matrix44.IDENTITY
 
                     drawer.background(ColorRGBa.PINK)
+                    drawer.cullTestPass = CullTestPass.BACK
+
                     drawPass(drawer, materialContext, meshes, instancedMeshes)
                 }
             }
