@@ -133,6 +133,7 @@ class SceneRenderer {
         drawer.depthWrite = true
         drawer.depthTestPass = DepthTestPass.LESS_OR_EQUAL
 
+        drawer.cullTestPass = CullTestPass.FRONT
         scene.updateFunctions.forEach {
             it()
         }
@@ -166,6 +167,7 @@ class SceneRenderer {
                     drawer.model = Matrix44.IDENTITY
 
                     drawer.background(ColorRGBa.PINK)
+                    drawer.cullTestPass = CullTestPass.BACK
                     drawPass(drawer, materialContext, meshes, instancedMeshes)
                 }
             }

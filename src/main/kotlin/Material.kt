@@ -122,7 +122,8 @@ private fun SpotLight.fs(index: Int): String = """
 |   p_lightLinearAttenuation$index * distance + p_lightQuadraticAttenuation$index * distance * distance);
 |   attenuation = 1.0;
 |   vec3 L = normalize(Lr);
-|
+
+|   float NoL = clamp(dot(N, L), 0.0, 1.0);
 |   float side = dot(L, N);
 |   float hit = max(dot(-L, p_lightDirection$index), 0.0);
 |   float falloff = clamp((hit - p_lightOuterCos$index) / (p_lightInnerCos$index - p_lightOuterCos$index), 0.0, 1.0);
@@ -134,12 +135,11 @@ private fun SpotLight.fs(index: Int): String = """
     |   vec3 smz = texture(p_lightShadowMap$index, lightProj.xy).rgb;
     |   float currentDepth = lightProj.z;
     |   float closestDepth = smz.x;
-    |   float shadow = (currentDepth - 0.005)  > closestDepth  ? 0.0 : 1.0;
+    |   float shadow = (currentDepth - 0.0005 * tan(acos(NoL)))  >= closestDepth  ? 0.0 : 1.0;
     |   attenuation *= shadow;
     |}
 """.trimMargin() else ""}
 |   vec3 H = normalize(V + L);
-|   float NoL = clamp(dot(N, L), 0.0, 1.0);
 |   float LoH = clamp(dot(L, H), 0.0, 1.0);
 |   float NoH = clamp(dot(N, H), 0.0, 1.0);
 |   f_diffuse += NoL * attenuation * Fd_Burley(m_roughness * m_roughness, NoV, NoL, LoH) * p_lightColor$index.rgb * m_color.rgb ;
