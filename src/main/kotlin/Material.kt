@@ -55,7 +55,7 @@ private fun HemisphereLight.fs(index: Int): String = """
 |{
 |   float f = dot(N, p_lightDirection$index) * 0.5 + 0.5;
 |   vec3 irr = ${irradianceMap?.let { "texture(p_lightIrradianceMap$index, N).rgb" } ?: "vec3(1.0)"};
-|   f_diffuse += mix(p_lightDownColor$index.rgb, p_lightUpColor$index.rgb, f) * irr * m_color.rgb;
+|   f_diffuse += mix(p_lightDownColor$index.rgb, p_lightUpColor$index.rgb, f) * irr * m_color.rgb * m_ambientOcclusion;
 |}
 """.trimMargin()
 
@@ -223,6 +223,7 @@ enum class TextureTarget {
     METALNESS,
     EMISSION,
     NORMAL,
+    AMBIENT_OCCLUSION,
 }
 
 class Texture(var source: TextureSource,
@@ -247,6 +248,7 @@ class BasicMaterial : Material {
             float m_f0 = 0.5;
             float m_roughness = p_roughness;
             float m_metalness = p_metalness;
+            float m_ambientOcclusion = 1.0;
             vec3 m_emission = p_emission.rgb;
             vec3 m_normal = vec3(0.0, 0.0, 1.0);
             vec4 f_fog = vec4(0.0, 0.0, 0.0, 0.0);
@@ -265,11 +267,13 @@ class BasicMaterial : Material {
             } + textures.mapIndexed { index, texture ->
                 when (texture.target) {
                     TextureTarget.NONE -> ""
-                    TextureTarget.COLOR -> "m_color.rgb *= tex$index.rgb;"
+                    TextureTarget.COLOR -> "m_color.rgb *= pow(tex$index.rgb, vec3(2.2));"
                     TextureTarget.METALNESS -> "m_metalness = tex$index.r;"
                     TextureTarget.ROUGNESS -> "m_roughness = tex$index.r;"
                     TextureTarget.EMISSION -> "m_emission += tex$index.rgb;"
-                    TextureTarget.NORMAL -> "f_worldNormal = normalize((u_modelNormalMatrix * vec4(tex$index.xyz,0.0)).xyz); "
+                    TextureTarget.NORMAL -> "f_worldNormal = normalize((u_modelNormalMatrix * vec4(tex$index.xyz,0.0)).xyz);"
+                    TextureTarget.AMBIENT_OCCLUSION -> "m_ambientOcclusion *= tex$index.r;"
+
                 }
             }).joinToString("\n")
         } else ""
