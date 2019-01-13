@@ -96,9 +96,9 @@ class PositionToCoc : Filter(Shader.createFromCode(Filter.filterVertexCode, filt
         near = false
         focalPlane = 4.0
         aperture = 1.0
-        aberrationConstant = 1.0
-        aberrationLinear = 8.0
-        aberrationBlendConstant = 1.0
-        aberrationBlendLinear = 1.0
+        aberrationConstant = 0.0
+        aberrationLinear = 0.0
+        aberrationBlendConstant = 0.0
+        aberrationBlendLinear = 0.0
     }
 }

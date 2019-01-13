@@ -26,7 +26,7 @@ class Sslr : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmen
 
         projection = Matrix44.IDENTITY
 
-        distanceLimit = 1280.0 / 20.0
+        distanceLimit = 20.0
         iterationLimit = 128
         jitterOriginGain = 0.0
 

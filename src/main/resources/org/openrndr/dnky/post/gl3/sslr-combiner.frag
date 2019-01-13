@@ -39,8 +39,8 @@ void main() {
     vec3 reflection = texture(reflections, v_texCoord0).rgb;
     vec3 color = texture(colors, v_texCoord0).rgb;
 
-    float roughness = material.r;
-    float metalness = material.b;
+    float roughness = material.b;
+    float metalness = material.r;
     vec2 step = 1.0 / textureSize(reflections, 0);
     int w = int(roughness*roughness * 8);
     float weight = 0.0;
@@ -55,10 +55,10 @@ void main() {
     }
     sum /= weight;
 
-    vec3 sc = metalness * baseColor.rgb + (metalness) * vec3(0.04);
+    vec3 sc = (metalness) * baseColor.rgb + (1.0-metalness) * vec3(0.08);
 
 
     vec2 dfg = PrefilteredDFG_Karis(roughness, dot(normalize(normal), normalize(-position)));
-    o_color.rgb = color + baseColor * (sum * dfg.x);
+    o_color.rgb = color + sc * (sum * dfg.x + sum * dfg.y);
     o_color.a = 1.0;
 }

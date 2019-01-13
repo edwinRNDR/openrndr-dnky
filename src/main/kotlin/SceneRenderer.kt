@@ -41,7 +41,7 @@ class DiffuseSpecularFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE, 
 class MaterialFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE),
         "material", ColorFormat.RGBa, ColorType.UINT8) {
     override fun generateShader(): String =
-        "o_$targetOutput = vec4(m_metalness, m_roughness, m_f0, 0.0);"
+        "o_$targetOutput = vec4(m_metalness, m_roughness, 0.0, 1.0);"
 }
 
 class BaseColorFacet : ColorBufferFacetCombiner( setOf(FacetType.COLOR),
@@ -189,7 +189,7 @@ class SceneRenderer {
                 }
 
                 drawer.isolatedWithTarget(target) {
-                    drawer.background(ColorRGBa.PINK)
+                    drawer.background(ColorRGBa.BLACK)
                     drawer.perspective(90.0, 1.0, 0.1, 100.0)
                     drawer.view = Matrix44.IDENTITY
                     drawer.model = Matrix44.IDENTITY

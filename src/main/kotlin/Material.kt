@@ -55,7 +55,7 @@ private fun HemisphereLight.fs(index: Int): String = """
 |{
 |   float f = dot(N, p_lightDirection$index) * 0.5 + 0.5;
 |   vec3 irr = ${irradianceMap?.let { "texture(p_lightIrradianceMap$index, N).rgb" } ?: "vec3(1.0)"};
-|   f_diffuse += mix(p_lightDownColor$index.rgb, p_lightUpColor$index.rgb, f) * irr * m_color.rgb * m_ambientOcclusion;
+|   f_diffuse += mix(p_lightDownColor$index.rgb, p_lightUpColor$index.rgb, f) * irr * ((1.0 - m_metalness) * m_color.rgb ) * m_ambientOcclusion;
 |}
 """.trimMargin()
 
@@ -68,7 +68,7 @@ private fun AreaLight.fs(index: Int): String = """
 |   vec3 dir = projection - p_lightPosition$index;
 |   vec2 diagonal = vec2(dot(dir,p_lightTangent$index),dot(dir,up));
 |   vec2 nearest2D = vec2(clamp( diagonal.x,-width,width  ),clamp(  diagonal.y,-height,height));
-            ${if(distanceField!=null) """
+            ${if (distanceField != null) """
                 vec2 dtc = nearest2D / (vec2(width, height) * 2.0) + vec2(0.5);
                 vec3 ddir = texture(p_lightDistanceField$index, dtc).rgb;
                 ddir.xy /= textureSize(p_lightDistanceField$index, 0);
@@ -90,7 +90,7 @@ private fun AreaLight.fs(index: Int): String = """
 |           vec2 dirSpec2D = vec2(dot(dirSpec, p_lightTangent$index), dot(dirSpec,up));
             float eps = 0.0;
 |           vec2 nearestSpec2D = vec2(clamp( dirSpec2D.x,-width + eps,width-eps  ),clamp(  dirSpec2D.y,-height + eps ,height - eps));
-            ${if(distanceField!=null) """
+            ${if (distanceField != null) """
                 vec2 tc = nearestSpec2D / (vec2(width, height) * 2.0) + vec2(0.5);
                 vec3 dir = texture(p_lightDistanceField$index, tc).rgb;
                 dir.xy /= textureSize(p_lightDistanceField$index, 0);
@@ -139,6 +139,7 @@ private fun SpotLight.fs(index: Int): String = """
     |   attenuation *= shadow;
     |}
 """.trimMargin() else ""}
+|   {
 |   vec3 H = normalize(V + L);
 |   float LoH = clamp(dot(L, H), 0.0, 1.0);
 |   float NoH = clamp(dot(N, H), 0.0, 1.0);
@@ -148,6 +149,7 @@ private fun SpotLight.fs(index: Int): String = """
 |   vec3 F = F_Schlick(m_color * (m_metalness) + 0.04 * (1.0-m_metalness), LoH);
 |   vec3 Fr = (Dg * Vs) * F;
 |   f_specular += NoL * attenuation * Fr * p_lightColor$index.rgb;
+|   }
 }
 """.trimMargin()
 
@@ -162,7 +164,8 @@ sealed class TextureSource
 object DummySource : TextureSource()
 abstract class TextureFromColorBuffer(val texture: ColorBuffer) : TextureSource()
 
-class TextureFromCode(val code:String) : TextureSource()
+class TextureFromCode(val code: String) : TextureSource()
+
 private fun TextureFromCode.fs(index: Int, target: TextureTarget) = """
 |vec4 tex$index = vec4(0.0, 0.0, 0.0, 1.0);
 |{
@@ -203,7 +206,7 @@ private fun Triplanar.fs(index: Int, target: TextureTarget) = """
 |   vec3 weights = pow(an, vec3(p_textureTriplanarSharpness$index));
 |   weights = weights / (weights.x + weights.y + weights.z);
 |   tex$index = tX * weights.x + tY * weights.y + weights.z * tZ;
-|   ${if(target == TextureTarget.NORMAL) """
+|   ${if (target == TextureTarget.NORMAL) """
     |   vec3 tnX = normalize( tX.xyz - vec3(0.5, 0.5, 0.0));
     |   vec3 tnY = normalize( tY.xyz - vec3(0.5, 0.5, 0.0));
     |   vec3 tnZ = normalize( tZ.xyz - vec3(0.5, 0.5, 0.0));
@@ -212,18 +215,19 @@ private fun Triplanar.fs(index: Int, target: TextureTarget) = """
     |   vec3 nZ = vec3(tnZ.xy, 0.0);
     |   vec3 normal = normalize(nX * weights.x + nY * weights.y + nZ * weights.z + n);
     |   tex$index = vec4(normal, 0.0);
-""".trimMargin() else "" }
+""".trimMargin() else ""}
 |}
 """.trimMargin()
 
-enum class TextureTarget {
-    NONE,
-    COLOR,
-    ROUGNESS,
-    METALNESS,
-    EMISSION,
-    NORMAL,
-    AMBIENT_OCCLUSION,
+sealed class TextureTarget {
+    object NONE : TextureTarget()
+    object COLOR : TextureTarget()
+    object ROUGNESS : TextureTarget()
+    object METALNESS : TextureTarget()
+    object EMISSION : TextureTarget()
+    object NORMAL : TextureTarget()
+    object AMBIENT_OCCLUSION : TextureTarget()
+    class Height(var scale: Double = 1.0) : TextureTarget()
 }
 
 class Texture(var source: TextureSource,
@@ -245,7 +249,7 @@ class BasicMaterial : Material {
 
         val preambleFS = """
             vec3 m_color = p_color.rgb;
-            float m_f0 = 0.5;
+            float m_f0 = 1.5;
             float m_roughness = p_roughness;
             float m_metalness = p_metalness;
             float m_ambientOcclusion = 1.0;
@@ -273,10 +277,27 @@ class BasicMaterial : Material {
                     TextureTarget.EMISSION -> "m_emission += tex$index.rgb;"
                     TextureTarget.NORMAL -> "f_worldNormal = normalize((u_modelNormalMatrix * vec4(tex$index.xyz,0.0)).xyz);"
                     TextureTarget.AMBIENT_OCCLUSION -> "m_ambientOcclusion *= tex$index.r;"
-
+                    is TextureTarget.Height -> ""
                 }
             }).joinToString("\n")
         } else ""
+
+
+        val displacers = textures.filter { it.target is TextureTarget.Height }
+
+        val textureVS = if (displacers.isNotEmpty()) textures.mapIndexed { index, it ->
+            if (it.target is TextureTarget.Height) {
+                when (val source = it.source) {
+                    DummySource -> "vec4 tex$index = vec4(1.0);"
+                    is ModelCoordinates -> source.fs(index)
+                    is Triplanar -> source.fs(index, it.target)
+                    is TextureFromCode -> source.fs(index, it.target)
+                    else -> TODO()
+                } + """
+                x_position += x_normal * tex$index.r * p_textureHeightScale$index;
+            """.trimIndent()
+            } else ""
+        }.joinToString("\n") else ""
 
         val lights = context.lights
         val lightFS = if (needLight) """
@@ -287,9 +308,9 @@ class BasicMaterial : Material {
         vec3 ep = (p_viewMatrixInverse * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         vec3 Vr = ep - v_worldPosition;
         vec3 V = normalize(Vr);
-        float NoV = abs(dot(N, V)) + 1e-5;
+        float NoV = abs(dot(N, V));// + 1e-5;
 
-        ${if(environmentMap && context.meshCubemaps.isNotEmpty()) """
+        ${if (environmentMap && context.meshCubemaps.isNotEmpty()) """
             /*
             float fresnelBias = 0.1;
             float fresnelScale = 0.5;
@@ -301,9 +322,9 @@ class BasicMaterial : Material {
                 vec2 dfg = PrefilteredDFG_Karis(m_roughness, NoV);
                 vec3 sc = m_metalness * m_color.rgb + (1.0-m_metalness) * vec3(0.04);
 
-                f_specular.rgb += sc * (texture(p_environmentMap, reflect(-V, normalize(f_worldNormal))).rgb * dfg.x + dfg.y);
+                f_specular.rgb += sc * (texture(p_environmentMap, reflect(-V, normalize(f_worldNormal))).rgb * dfg.x + dfg.y) * m_ambientOcclusion;
             }
-        """.trimIndent()  else ""  }
+        """.trimIndent() else ""}
 
         ${lights.mapIndexed { index, (node, light) ->
             when (light) {
@@ -332,6 +353,7 @@ class BasicMaterial : Material {
         }.joinToString("\n")
 
         val fs = preambleFS + textureFs + lightFS + combinerFS
+        val vs = (this@BasicMaterial.vertexTransform ?: "") + textureVS
 
         return shadeStyle {
             fragmentPreamble = """
@@ -341,7 +363,7 @@ class BasicMaterial : Material {
             |$shaderGGX
             """.trimMargin()
             this.suppressDefaultOutput = true
-            this.vertexTransform = this@BasicMaterial.vertexTransform
+            this.vertexTransform = vs
             fragmentTransform = fs
             context.pass.combiners.map {
                 if (rt.colorBuffers.size <= 1) {
@@ -396,7 +418,10 @@ class BasicMaterial : Material {
                         shadeStyle.parameter("textureTriplanarScale$index", source.scale)
                         shadeStyle.parameter("textureTriplanarOffset$index", source.offset)
                     }
-
+                }
+                if (texture.target is TextureTarget.Height) {
+                    val target = texture.target as TextureTarget.Height
+                    shadeStyle.parameter("textureHeightScale$index", target.scale)
                 }
             }
 
@@ -451,18 +476,36 @@ class BasicMaterial : Material {
                         shadeStyle.parameter("lightPosition$index", (node.worldTransform * Vector4.UNIT_W).xyz)
                         shadeStyle.parameter("lightDirection$index", ((normalMatrix(node.worldTransform)) * Vector3(0.0, 0.0, 1.0)).normalized)
                         shadeStyle.parameter("lightTangent$index", ((normalMatrix(node.worldTransform)) * Vector3(1.0, 0.0, 0.0)).normalized)
-                        shadeStyle.parameter("lightSize$index", Vector2(light.width/2.0, light.height/2.0))
+                        shadeStyle.parameter("lightSize$index", Vector2(light.width / 2.0, light.height / 2.0))
 
                         light.distanceField?.let {
                             shadeStyle.parameter("lightDistanceField$index", it)
                         }
-
                     }
                 }
             }
             context.fogs.forEachIndexed { index, (node, fog) ->
                 shadeStyle.parameter("fogColor$index", fog.color)
                 shadeStyle.parameter("fogEnd$index", fog.end)
+            }
+        } else {
+            textures.forEachIndexed { index, texture ->
+
+                if (texture.target is TextureTarget.Height) {
+
+                    when (val source = texture.source) {
+                        is TextureFromColorBuffer -> shadeStyle.parameter("texture$index", source.texture)
+                    }
+                    when (val source = texture.source) {
+                        is Triplanar -> {
+                            shadeStyle.parameter("textureTriplanarSharpness$index", source.sharpness)
+                            shadeStyle.parameter("textureTriplanarScale$index", source.scale)
+                            shadeStyle.parameter("textureTriplanarOffset$index", source.offset)
+                        }
+                    }
+                    val target = texture.target as TextureTarget.Height
+                    shadeStyle.parameter("textureHeightScale$index", target.scale)
+                }
             }
         }
     }
