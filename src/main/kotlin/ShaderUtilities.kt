@@ -25,6 +25,15 @@ V - eye - world vertex position
 L - world light pos - world vertex position
  */
 val shaderGGX = """
+#define bias 0.125
+#define HASHSCALE 443.8975
+vec2 hash22(vec2 p) {
+	vec3 p3 = fract(vec3(p.xyx) * HASHSCALE);
+    p3 += dot(p3, p3.yzx+19.19);
+    return fract(vec2((p3.x + p3.y)*p3.z, (p3.x+p3.z)*p3.y));
+}
+
+
 #define PI 3.1415926535
 
 float pow5(float x) {
