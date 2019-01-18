@@ -65,8 +65,19 @@ class PointLight(var constantAttenuation: Double = 1.0,
                  var quadraticAttenuation: Double = 0.0) : Light()
 
 class AmbientLight : Light()
+
+sealed class Shadows {
+    object None : Shadows()
+    abstract class MappedShadows(val mapSize: Int) : Shadows()
+    abstract class DepthMappedShadows(mapSize:Int): MappedShadows(mapSize)
+    abstract class ColorMappedShadows(mapSize:Int): MappedShadows(mapSize)
+    class Simple(mapSize: Int = 1024) : DepthMappedShadows(mapSize)
+    class PCF(mapSize: Int = 1024, val sampleCount: Int = 12) : DepthMappedShadows(mapSize)
+    class VSM(mapSize: Int = 1024) : ColorMappedShadows(mapSize)
+}
+
 interface ShadowLight {
-    var shadows: Boolean
+    var shadows: Shadows
     fun projection(renderTarget: RenderTarget): Matrix44
     fun view(node: SceneNode): Matrix44 {
         val position = node.worldTransform * Vector4.UNIT_W
@@ -79,7 +90,7 @@ interface ShadowLight {
     }
 }
 
-class DirectionalLight(var direction: Vector3 = Vector3.UNIT_Z, override var shadows: Boolean = false) : Light(), ShadowLight {
+class DirectionalLight(var direction: Vector3 = Vector3.UNIT_Z, override var shadows: Shadows = Shadows.None) : Light(), ShadowLight {
     override fun projection(renderTarget: RenderTarget): Matrix44 {
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
@@ -93,7 +104,7 @@ class SpotLight(var direction: Vector3 = Vector3.UNIT_Z, var innerAngle: Double 
     var constantAttenuation = 1.0
     var linearAttenuation = 0.0
     var quadraticAttenuation = 0.0
-    override var shadows: Boolean = false
+    override var shadows: Shadows = Shadows.None
     override fun projection(renderTarget: RenderTarget): Matrix44 {
         return perspective(outerAngle * 2.0, renderTarget.width * 1.0 / renderTarget.height, 1.0, 150.0)
     }
@@ -103,7 +114,7 @@ class AreaLight : Light(), ShadowLight {
     var width: Double = 1.0
     var height: Double = 1.0
     var distanceField: ColorBuffer? = null
-    override var shadows: Boolean = false
+    override var shadows: Shadows = Shadows.None
     override fun projection(renderTarget: RenderTarget): Matrix44 {
         return ortho(-width / 2.0, width / 2.0, -height / 2.0, height / 2.0, 0.0, 1000.0)
     }

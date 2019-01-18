@@ -19,6 +19,26 @@ vec3 linePlaneIntersect(in vec3 lp, in vec3 lv, in vec3 pc, in vec3 pn){
 }
 """.trimIndent()
 
+val shaderVSM = """
+| float linstep(float min, float max, float v)
+|{
+|  return clamp((v - min) / (max - min), 0, 1);
+|}
+|// https://developer.nvidia.com/gpugems/GPUGems3/gpugems3_ch08.html
+|float chebyshevUpperBound(vec2 moments, float t, float minVariance) {
+|   // One-tailed inequality valid if t > Moments.x
+|   float p = (t <= moments.x) ? 1.0 : 0.0;
+|   // Compute variance.
+|   float variance = moments.y - (moments.x * moments.x);
+|   variance = max(variance, minVariance);
+|   // Compute probabilistic upper bound.
+|   float d = t - moments.x;
+|   float p_max = variance / (variance + d*d);
+|   p_max = smoothstep(0.6, 1, p_max);
+|   return max(p, p_max);
+}
+""".trimIndent()
+
 /*
 N - world space normal
 V - eye - world vertex position

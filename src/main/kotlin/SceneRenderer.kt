@@ -10,6 +10,7 @@ import org.openrndr.math.Vector3
 import org.openrndr.math.Vector4
 import org.openrndr.math.transforms.scale
 import org.openrndr.math.transforms.translate
+import post.ApproximateGaussianBlur
 
 enum class FacetType(val shaderFacet: String) {
     WORLD_POSITION("f_worldPosition"),
@@ -32,10 +33,24 @@ abstract class ColorBufferFacetCombiner(facets: Set<FacetType>,
                                         val format: ColorFormat,
                                         val type: ColorType) : FacetCombiner(facets, targetOutput)
 
+
+class MomentsFacet: ColorBufferFacetCombiner( setOf(FacetType.WORLD_POSITION), "moments", ColorFormat.RG, ColorType.FLOAT16) {
+
+    override fun generateShader(): String {
+        return """
+            float depth = -v_viewPosition.z;
+            float dx = dFdx(depth);
+            float dy = dFdy(depth);
+            o_$targetOutput = vec4(-v_viewPosition.z, v_viewPosition.z*v_viewPosition.z + 0.25 * dx*dx+dy*dy, 0.0, 1.0);
+        """
+    }
+
+}
+
 class DiffuseSpecularFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE, FacetType.SPECULAR),
         "diffuseSpecular", ColorFormat.RGB, ColorType.FLOAT16) {
     override fun generateShader(): String =
-            "o_$targetOutput =vec4( max(vec3(0.0), f_diffuse.rgb) + max(vec3(0.0), f_specular.rgb), 1.0);"
+            "o_$targetOutput = vec4( max(vec3(0.0), f_diffuse.rgb) + max(vec3(0.0), f_specular.rgb), 1.0);"
 }
 
 class MaterialFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE),
@@ -99,6 +114,7 @@ class RenderPass(val combiners: List<FacetCombiner>)
 
 val DefaultPass = RenderPass(listOf(LDRColorFacet()))
 val LightPass = RenderPass(emptyList())
+val VSMLightPass = RenderPass(listOf(MomentsFacet()))
 
 fun createPassTarget(pass: RenderPass, width: Int, height: Int, depthFormat: DepthFormat = DepthFormat.DEPTH24): RenderTarget {
     return renderTarget(width, height) {
@@ -114,6 +130,8 @@ fun createPassTarget(pass: RenderPass, width: Int, height: Int, depthFormat: Dep
 
 
 class SceneRenderer {
+
+    val blur = ApproximateGaussianBlur()
 
     var shadowLightTargets = mutableMapOf<ShadowLight, RenderTarget>()
     var meshCubemaps = mutableMapOf<Mesh, Cubemap>()
@@ -151,16 +169,27 @@ class SceneRenderer {
         val environmentMapMeshes = meshes.filter { (it.content.material as? BasicMaterial)?.environmentMap == true }
 
         run {
-            val pass = LightPass
-            val materialContext = MaterialContext(pass, lights, fogs, shadowLightTargets, emptyMap())
-
-            lights.filter { it.content is ShadowLight && (it.content as ShadowLight).shadows }.forEach {
+            lights.filter { it.content is ShadowLight && (it.content as ShadowLight).shadows is Shadows.MappedShadows }.forEach {
                 val shadowLight = it.content as ShadowLight
+                val pass: RenderPass
+                when (shadowLight.shadows) {
+                    is Shadows.PCF, is Shadows.Simple -> {
+                        pass = LightPass
+
+                    }
+                    is Shadows.VSM -> {
+                        pass = VSMLightPass
+                    }
+                    else -> TODO()
+                }
                 val target = shadowLightTargets.getOrPut(shadowLight) {
-                    createPassTarget(pass, 1024, 1024, DepthFormat.DEPTH16)
+                    val mapSize = (shadowLight.shadows as Shadows.MappedShadows).mapSize
+                    createPassTarget(pass, mapSize, mapSize, DepthFormat.DEPTH16)
                 }
                 target.clearDepth(depth = 1.0)
+
                 val look = shadowLight.view(it.node)
+                val materialContext = MaterialContext(pass, lights, fogs, shadowLightTargets, emptyMap())
                 drawer.isolatedWithTarget(target) {
                     drawer.projection = shadowLight.projection(target)
                     drawer.view = look
@@ -169,6 +198,15 @@ class SceneRenderer {
                     drawer.background(ColorRGBa.PINK)
                     drawer.cullTestPass = CullTestPass.BACK
                     drawPass(drawer, materialContext, meshes, instancedMeshes)
+                }
+                when (shadowLight.shadows) {
+                    is Shadows.VSM -> {
+                        blur.gain = 1.0
+                        blur.sigma = 3.0
+                        blur.window = 9
+                        blur.spread = 1.0
+                        blur.apply(target.colorBuffer(0), target.colorBuffer(0))
+                    }
                 }
             }
         }

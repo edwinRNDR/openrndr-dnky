@@ -114,7 +114,9 @@ private fun AreaLight.fs(index: Int): String = """
 """.trimIndent()
 
 
-private fun SpotLight.fs(index: Int): String = """
+private fun SpotLight.fs(index: Int): String {
+    val shadows = shadows
+    return """
 |{
 |   vec3 Lr = p_lightPosition$index - v_worldPosition;
 |   float distance = length(Lr);
@@ -128,58 +130,21 @@ private fun SpotLight.fs(index: Int): String = """
 |   float hit = max(dot(-L, p_lightDirection$index), 0.0);
 |   float falloff = clamp((hit - p_lightOuterCos$index) / (p_lightInnerCos$index - p_lightOuterCos$index), 0.0, 1.0);
 |   attenuation *= falloff;
-|   ${if (shadows) """
-    |float lrl = length(Lr)/100.0;
-    |vec2 fTaps_Poisson[12];
-	fTaps_Poisson[0]  = vec2(-.326,-.406);
-	fTaps_Poisson[1]  = vec2(-.840,-.074);
-	fTaps_Poisson[2]  = vec2(-.696, .457);
-	fTaps_Poisson[3]  = vec2(-.203, .621);
-	fTaps_Poisson[4]  = vec2( .962,-.195);
-	fTaps_Poisson[5]  = vec2( .473,-.480);
-	fTaps_Poisson[6]  = vec2( .519, .767);
-	fTaps_Poisson[7]  = vec2( .185,-.893);
-	fTaps_Poisson[8]  = vec2( .507, .064);
-	fTaps_Poisson[9]  = vec2( .896, .412);
-	fTaps_Poisson[10] = vec2(-.322,-.933);
-	fTaps_Poisson[11] = vec2(-.792,-.598);
-    |vec4 smc = (p_lightTransform$index * vec4(v_worldPosition,1.0));
-    |vec3 lightProj = (smc.xyz/smc.w) * 0.5 + 0.5;
-    |if (lightProj.x > 0.0 && lightProj.x < 1.0 && lightProj.y > 0 && lightProj.y < 1) {
-    |   vec3 smz = texture(p_lightShadowMap$index, lightProj.xy).rgb;
-    |   vec2 step = 1.0 / textureSize(p_lightShadowMap$index,0);
-    |   float result = 0.0;
-    |   float compToZ = (lightProj.z- 0.0020 * tan(acos(NoL))) - 0.0003;
-    |   float noise = hash22(lightProj.xy*10.0).x;
-    |   float r = noise * 3.1415926535 * 2.0;
-    |   mat2 rot = mat2( vec2(cos(r), -sin(r)), vec2(sin(r),cos(r)));
-//    |   for (int j = -1; j < 1; ++j) {
-//    |       for (int i = -1; i < 1; ++i) {
-    |   for (int i = 0; i < 12; ++i) {
-    |               float depth = texture(p_lightShadowMap$index, lightProj.xy + rot*fTaps_Poisson[i]*i*lrl*step ).r;
-    |               result += step(compToZ, depth);
-//    |       }
-    |   }
-    |   result/=9;
-    |   float currentDepth = lightProj.z;
-    |   float closestDepth = smz.x;
-    |   float shadow = result;// (currentDepth - 0.0020 * tan(acos(NoL))) - 0.0003  >= closestDepth  ? 0.0 : 1.0;
-    |   attenuation *= shadow;
-    |}
-""".trimMargin() else ""}
+|   ${shadows.fs(index)}
 |   {
-|   vec3 H = normalize(V + L);
-|   float LoH = clamp(dot(L, H), 0.0, 1.0);
-|   float NoH = clamp(dot(N, H), 0.0, 1.0);
-|   f_diffuse += NoL * attenuation * Fd_Burley(m_roughness * m_roughness, NoV, NoL, LoH) * p_lightColor$index.rgb * m_color.rgb ;
-|   float Dg = D_GGX(m_roughness * m_roughness, NoH, H);
-|   float Vs = V_SmithGGXCorrelated(m_roughness * m_roughness, NoV, NoL);
-|   vec3 F = F_Schlick(m_color * (m_metalness) + 0.04 * (1.0-m_metalness), LoH);
-|   vec3 Fr = (Dg * Vs) * F;
-|   f_specular += NoL * attenuation * Fr * p_lightColor$index.rgb;
+|       vec3 H = normalize(V + L);
+|       float LoH = clamp(dot(L, H), 0.0, 1.0);
+|       float NoH = clamp(dot(N, H), 0.0, 1.0);
+|       f_diffuse += NoL * attenuation * Fd_Burley(m_roughness * m_roughness, NoV, NoL, LoH) * p_lightColor$index.rgb * m_color.rgb ;
+|       float Dg = D_GGX(m_roughness * m_roughness, NoH, H);
+|       float Vs = V_SmithGGXCorrelated(m_roughness * m_roughness, NoV, NoL);
+|       vec3 F = F_Schlick(m_color * (m_metalness) + 0.04 * (1.0-m_metalness), LoH);
+|       vec3 Fr = (Dg * Vs) * F;
+|       f_specular += NoL * attenuation * Fr * p_lightColor$index.rgb;
 |   }
 }
 """.trimMargin()
+}
 
 private fun Fog.fs(index: Int): String = """
 |{
@@ -389,6 +354,7 @@ class BasicMaterial : Material {
             |$shaderProjectOnPlane
             |$shaderSideOfPlane
             |$shaderGGX
+            |$shaderVSM
             """.trimMargin()
             this.suppressDefaultOutput = true
             this.vertexTransform = vs
@@ -476,16 +442,22 @@ class BasicMaterial : Material {
                         shadeStyle.parameter("lightInnerCos$index", Math.cos(Math.toRadians(light.innerAngle)))
                         shadeStyle.parameter("lightOuterCos$index", Math.cos(Math.toRadians(light.outerAngle)))
 
-                        if (light.shadows) {
+                        if (light.shadows is Shadows.MappedShadows) {
                             context.shadowMaps[light]?.let {
                                 val look = light.view(node)
                                 shadeStyle.parameter("lightTransform$index",
                                         light.projection(it) * look)
-                                shadeStyle.parameter("lightShadowMap$index", it.depthBuffer ?: TODO())
+
+                                if (light.shadows is Shadows.DepthMappedShadows) {
+                                    shadeStyle.parameter("lightShadowMap$index", it.depthBuffer ?: TODO())
+                                }
+
+                                if (light.shadows is Shadows.ColorMappedShadows) {
+                                    shadeStyle.parameter("lightShadowMap$index", it.colorBuffer(0))
+                                }
                             }
                         }
                     }
-
                     is DirectionalLight -> {
                         shadeStyle.parameter("lightDirection$index", ((normalMatrix(node.worldTransform)) * light.direction).normalized)
                     }
