@@ -6,7 +6,7 @@ fun Shadows.VSM.fs(index: Int) : String = """
 |   vec3 lightProj = (smc.xyz/smc.w) * 0.5 + 0.5;
 |   if (lightProj.x > 0.0 && lightProj.x < 1.0 && lightProj.y > 0 && lightProj.y < 1) {
 |       vec2 moments = texture(p_lightShadowMap$index, lightProj.xy).xy;
-|       attenuation *= chebyshevUpperBound(moments, length(Lr), 3.0);
+|       attenuation *= chebyshevUpperBound(moments, length(Lr), 50.0);
 |   }
 |}
 """.trimIndent()
@@ -48,14 +48,14 @@ fun Shadows.PCF.fs(index: Int): String = """
 |   vec3 lightProj = (smc.xyz/smc.w) * 0.5 + 0.5;
 |   if (lightProj.x > 0.0 && lightProj.x < 1.0 && lightProj.y > 0 && lightProj.y < 1) {
 |       vec3 smz = texture(p_lightShadowMap$index, lightProj.xy).rgb;
-|       vec2 step = 1.0 / textureSize(p_lightShadowMap$index,0);
+|       vec2 stepSize = 1.0 / textureSize(p_lightShadowMap$index,0);
 |       float result = 0.0;
 |       float compToZ = (lightProj.z- 0.0020 * tan(acos(NoL))) - 0.0003;
 |       float noise = hash22(lightProj.xy*10.0).x;
 |       float r = noise * 3.1415926535 * 2.0;
 |       mat2 rot = mat2( vec2(cos(r), -sin(r)), vec2(sin(r),cos(r)));
 |       for (int i = 0; i < 12; ++i) {
-|           float depth = texture(p_lightShadowMap$index, lightProj.xy + rot*fTaps_Poisson[i]*i*lrl*step ).r;
+|           float depth = texture(p_lightShadowMap$index, lightProj.xy + rot*fTaps_Poisson[i]*i*lrl*stepSize ).r;
 |           result += step(compToZ, depth);
 |       }
 |       result /= 12;

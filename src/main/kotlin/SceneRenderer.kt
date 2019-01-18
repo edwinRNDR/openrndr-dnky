@@ -35,16 +35,14 @@ abstract class ColorBufferFacetCombiner(facets: Set<FacetType>,
 
 
 class MomentsFacet: ColorBufferFacetCombiner( setOf(FacetType.WORLD_POSITION), "moments", ColorFormat.RG, ColorType.FLOAT16) {
-
     override fun generateShader(): String {
         return """
-            float depth = -v_viewPosition.z;
+            float depth = length(v_viewPosition);
             float dx = dFdx(depth);
             float dy = dFdy(depth);
-            o_$targetOutput = vec4(-v_viewPosition.z, v_viewPosition.z*v_viewPosition.z + 0.25 * dx*dx+dy*dy, 0.0, 1.0);
+            o_$targetOutput = vec4(depth, depth*depth + 0.25 * dx*dx+dy*dy, 0.0, 1.0);
         """
     }
-
 }
 
 class DiffuseSpecularFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE, FacetType.SPECULAR),
