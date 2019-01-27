@@ -89,7 +89,7 @@ class NormalFacet : ColorBufferFacetCombiner(setOf(FacetType.WORLD_NORMAL), "nor
     override fun generateShader(): String = "o_$targetOutput = vec4(v_worldNormal.rgb, 1.0);"
 }
 
-class ViewPositionFacet : ColorBufferFacetCombiner(setOf(FacetType.VIEW_POSITION), "viewPosition", ColorFormat.RGB, ColorType.FLOAT16) {
+class ViewPositionFacet : ColorBufferFacetCombiner(setOf(FacetType.VIEW_POSITION), "viewPosition", ColorFormat.RGB, ColorType.FLOAT32) {
     override fun generateShader(): String = "o_$targetOutput.rgb = v_viewPosition.rgb;"
 }
 

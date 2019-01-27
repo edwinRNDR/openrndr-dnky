@@ -39,10 +39,11 @@ vec4 BlurTexture(float coc, sampler2D tex, vec2 uv, vec2 direction)
         finalColor += color * saturate(-1.5+orgCoc-i)* saturate(-1.5+coc-i) * chroma;
     }
 
-    if (blurAmount > 0.0) {
+    if (blurAmount >= 1.0) {
         return (finalColor / blurAmount);
     } else {
-        return texture(tex, uv);
+        vec4 t = texture(tex, uv);
+        return t / t.a;
     }
 }
 

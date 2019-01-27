@@ -168,7 +168,6 @@ private fun TextureFromCode.fs(index: Int, target: TextureTarget) = """
 |}
 """
 
-
 class ModelCoordinates(texture: ColorBuffer,
                        val input: String = "va_texCoord0.xy") : TextureFromColorBuffer(texture)
 
