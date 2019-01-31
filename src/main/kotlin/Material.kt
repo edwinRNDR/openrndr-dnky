@@ -223,7 +223,14 @@ sealed class TextureTarget {
 }
 
 class Texture(var source: TextureSource,
-              var target: TextureTarget)
+              var target: TextureTarget) {
+
+    fun copy() : Texture {
+        var copied = Texture(source, target)
+        return copied
+    }
+
+}
 
 class BasicMaterial : Material {
     var environmentMap = false
@@ -235,6 +242,20 @@ class BasicMaterial : Material {
     var vertexTransform: String? = null
     var parameters = mutableMapOf<String, Any>()
     var textures = mutableListOf<Texture>()
+
+
+    fun copy() : BasicMaterial {
+        var copied = BasicMaterial()
+        copied.environmentMap = environmentMap
+        copied.color = color
+        copied.metalness = metalness
+        copied.roughness = roughness
+        copied.emission = emission
+        copied.vertexTransform = vertexTransform
+        copied.parameters.putAll(parameters)
+        copied.textures.addAll(textures.map { it.copy() })
+        return copied
+    }
 
     override fun generateShadeStyle(context: MaterialContext): ShadeStyle {
         val needLight = needLight(context)
@@ -267,7 +288,7 @@ class BasicMaterial : Material {
                     TextureTarget.METALNESS -> "m_metalness = tex$index.r;"
                     TextureTarget.ROUGNESS -> "m_roughness = tex$index.r;"
                     TextureTarget.EMISSION -> "m_emission += tex$index.rgb;"
-                    TextureTarget.NORMAL -> "f_worldNormal = normalize((u_modelNormalMatrix * vec4(tex$index.xyz,0.0)).xyz);"
+                    TextureTarget.NORMAL -> "f_worldNormal = normalize((v_modelNormalMatrix * vec4(tex$index.xyz,0.0)).xyz);"
                     TextureTarget.AMBIENT_OCCLUSION -> "m_ambientOcclusion *= tex$index.r;"
                     is TextureTarget.Height -> ""
                 }

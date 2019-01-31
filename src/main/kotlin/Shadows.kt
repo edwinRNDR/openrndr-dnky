@@ -6,7 +6,7 @@ fun Shadows.VSM.fs(index: Int) : String = """
 |   vec3 lightProj = (smc.xyz/smc.w) * 0.5 + 0.5;
 |   if (lightProj.x > 0.0 && lightProj.x < 1.0 && lightProj.y > 0 && lightProj.y < 1) {
 |       vec2 moments = texture(p_lightShadowMap$index, lightProj.xy).xy;
-|       attenuation *= chebyshevUpperBound(moments, length(Lr), 50.0);
+|       attenuation *= (0.1 + 0.9 * chebyshevUpperBound(moments, length(Lr), 50.0));
 |   }
 |}
 """.trimIndent()

@@ -15,6 +15,11 @@ class PhotographicRenderer(val renderer: SceneRenderer) {
     var fogDensity = 0.01
     var fogPower = 1.0
     var fogColor = ColorRGBa.GRAY
+
+    var abberationConstant = 0.0
+    var abberationLinear = 0.0
+    var abberationBlendConstant = 0.0
+    var abberationBlendLinear = 0.0
 }
 
 /**
@@ -70,6 +75,10 @@ fun photographicRenderer(): PhotographicRenderer {
                 exposure = 1.0
                 focalPlane = pr.focalPlane
                 aperture = pr.aperture
+                aberrationLinear = pr.abberationLinear
+                aberrationBlendLinear = pr.abberationBlendLinear
+                aberrationConstant = pr.abberationConstant
+                aberrationBlendConstant = pr.abberationBlendConstant
             }
         }
 
