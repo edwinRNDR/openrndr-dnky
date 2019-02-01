@@ -135,7 +135,7 @@ private fun SpotLight.fs(index: Int): String {
 |       vec3 H = normalize(V + L);
 |       float LoH = clamp(dot(L, H), 0.0, 1.0);
 |       float NoH = clamp(dot(N, H), 0.0, 1.0);
-|       f_diffuse += NoL * attenuation * Fd_Burley(m_roughness * m_roughness, NoV, NoL, LoH) * p_lightColor$index.rgb * m_color.rgb ;
+|       f_diffuse += NoL * (0.1+0.9*attenuation) * Fd_Burley(m_roughness * m_roughness, NoV, NoL, LoH) * p_lightColor$index.rgb * m_color.rgb ;
 |       float Dg = D_GGX(m_roughness * m_roughness, NoH, H);
 |       float Vs = V_SmithGGXCorrelated(m_roughness * m_roughness, NoV, NoL);
 |       vec3 F = F_Schlick(m_color * (m_metalness) + 0.04 * (1.0-m_metalness), LoH);
