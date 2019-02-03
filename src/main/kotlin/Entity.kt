@@ -90,6 +90,13 @@ interface ShadowLight {
     }
 }
 
+interface AttenuatedLight {
+    var constantAttenuation: Double
+    var linearAttenuation: Double
+    var quadraticAttenuation: Double
+
+}
+
 class DirectionalLight(var direction: Vector3 = Vector3.UNIT_Z, override var shadows: Shadows = Shadows.None) : Light(), ShadowLight {
     override fun projection(renderTarget: RenderTarget): Matrix44 {
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
@@ -100,17 +107,20 @@ class DirectionalLight(var direction: Vector3 = Vector3.UNIT_Z, override var sha
     }
 }
 
-class SpotLight(var direction: Vector3 = Vector3.UNIT_Z, var innerAngle: Double = 45.0, var outerAngle: Double = 90.0) : Light(), ShadowLight {
-    var constantAttenuation = 1.0
-    var linearAttenuation = 0.0
-    var quadraticAttenuation = 0.0
+class SpotLight(var direction: Vector3 = Vector3.UNIT_Z, var innerAngle: Double = 45.0, var outerAngle: Double = 90.0) : Light(), ShadowLight, AttenuatedLight {
+    override var constantAttenuation = 1.0
+    override var linearAttenuation = 0.0
+    override var quadraticAttenuation = 0.0
     override var shadows: Shadows = Shadows.None
     override fun projection(renderTarget: RenderTarget): Matrix44 {
         return perspective(outerAngle * 2.0, renderTarget.width * 1.0 / renderTarget.height, 1.0, 150.0)
     }
 }
 
-class AreaLight : Light(), ShadowLight {
+class AreaLight : Light(), ShadowLight, AttenuatedLight {
+    override var constantAttenuation = 1.0
+    override var linearAttenuation = 0.0
+    override var quadraticAttenuation = 0.0
     var width: Double = 1.0
     var height: Double = 1.0
     var distanceField: ColorBuffer? = null

@@ -70,6 +70,20 @@ float D_GGX(float linearRoughness, float NoH, const vec3 h) {
     return d;
 }
 
+float D_GGXm(float linearRoughness, float NoH, const vec3 h, const vec3 n) {
+    vec3 NxH = cross(n, h);
+        float oneMinusNoHSquared = dot(NxH, NxH);
+
+
+    // Walter et al. 2007, "Microfacet Models for Refraction through Rough Surfaces"
+    //float oneMinusNoHSquared = 1.0 - NoH * NoH;
+    float a = NoH * linearRoughness;
+    float k = linearRoughness / (oneMinusNoHSquared + a * a);
+    float d = k * k * (1.0 / PI);
+    return d;
+}
+
+
 float V_SmithGGXCorrelated(float linearRoughness, float NoV, float NoL) {
     // Heitz 2014, "Understanding the Masking-Shadowing Function in Microfacet-Based BRDFs"
     float a2 = linearRoughness * linearRoughness;

@@ -78,10 +78,22 @@ private fun AreaLight.fs(index: Int): String = """
             """.trimIndent() else ""}
 |   vec3 nearestPointInside = p_lightPosition$index + (p_lightTangent$index*nearest2D.x+up*nearest2D.y);
 |   float dist = distance(v_worldPosition, nearestPointInside);
-|   vec3 L = normalize(nearestPointInside - v_worldPosition);
-|   float attenuation = 1.0 / (1.0 + dist*0.1);
-|   float nDotL = dot(p_lightDirection$index, -L);
-|   if (nDotL > 0.0 && sideOfPlane(v_worldPosition, p_lightPosition$index, p_lightDirection$index) == 1) {
+
+|   float attenuation = 1.0;
+|   float NoL;
+|   {
+|       vec3 L = normalize(nearestPointInside - v_worldPosition);
+|       vec3 H = normalize(V + L);
+|       NoL = clamp(dot(N, L), 0.0, 1.0);
+|       float LoH = clamp(dot(L, H), 0.0, 1.0);
+|       float NoH = clamp(dot(N, H), 0.0, 1.0);
+
+|   float hit = max(dot(-L, p_lightDirection$index), 0.0);
+
+|       if (sideOfPlane(v_worldPosition, p_lightPosition$index, p_lightDirection$index) == 1)
+|       f_diffuse += hit * NoL * (0.1+0.9*attenuation) * Fd_Burley(m_roughness * m_roughness, NoV, NoL, LoH) * p_lightColor$index.rgb * m_color.rgb ;
+    }
+|   if (true) {
 |       vec3 R = reflect(V, N);
 |       vec3 E = linePlaneIntersect(v_worldPosition ,R, p_lightPosition$index, p_lightDirection$index);
 |       float specAngle = dot(R, p_lightDirection$index);
@@ -97,19 +109,28 @@ private fun AreaLight.fs(index: Int): String = """
                 if (dir.z == 0.0) {
                     nearestSpec2D += dir.xy * vec2(width, -height);
                 }
-
             """.trimIndent() else ""}
-|           vec3 nearestSpec3D = p_lightPosition$index + (p_lightTangent$index*nearestSpec2D.x+up*nearestSpec2D.y);
-|           vec3 toLight = nearestSpec3D-v_worldPosition;
-|           float sf = max(0.0, dot(-normalize(toLight), p_lightDirection$index));
-|           float realDist = length(toLight);
-|           float specDist = length(nearestSpec2D-dirSpec2D);
-|           float specFactor = exp(-specDist) * exp(-realDist*0.05) * sf; //1.0-clamp(length(nearestSpec2D-dirSpec2D)* (sf*10.0 + 1.0),0.0,1.0);
+|           vec3 nearestPointInside = p_lightPosition$index + (p_lightTangent$index*nearestSpec2D.x+up*nearestSpec2D.y);
+|           vec3 L = normalize(nearestPointInside - v_worldPosition); //normalize(nearestPointInside - v_worldPosition);
+|           vec3 H = normalize(V + L);
+|           NoL = clamp(dot(N, L), 0.0, 1.0);
+|           float LoH = clamp(dot(L, H), 0.0, 1.0);
+|           float NoH = clamp(dot(N, H), 0.0, 1.0);
+|           float Dg = D_GGX(m_roughness * m_roughness, NoH, H);
+|           float Vs = V_SmithGGXCorrelated(m_roughness * m_roughness, NoV, NoL);
+|           vec3 F = F_Schlick(m_color * (m_metalness) + 0.04 * (1.0-m_metalness), LoH);
+|           vec3 Fr = (Dg*Vs) * F;
+|           //f_specular += NoL * attenuation * Fr * p_lightColor$index.rgb;
+|           f_specular += attenuation * ggx(N, V, L, m_roughness, m_f0) * p_lightColor$index.rgb * m_color.rgb;
+|           //float sf = max(0.0, dot(-normalize(toLight), p_lightDirection$index));
+|           //float realDist = length(toLight);
+|           //float specDist = length(nearestSpec2D-dirSpec2D);
+|           //float specFactor = exp(-specDist) * exp(-realDist*0.05) * sf; //1.0-clamp(length(nearestSpec2D-dirSpec2D)* (sf*10.0 + 1.0),0.0,1.0);
             //specFactor =1.0-clamp(length(nearestSpec2D-dirSpec2D), 0.0, 1.0);
-            f_specular += p_lightColor$index.rgb * specFactor * specAngle * m_color.rgb;
+            //f_specular += p_lightColor$index.rgb * specFactor * specAngle * m_color.rgb;
 |       }
 |   }
-    f_diffuse += m_color.rgb * p_lightColor$index.rgb  * max(0.0, nDotL) * attenuation;
+
 |}
 """.trimIndent()
 
@@ -321,7 +342,7 @@ class BasicMaterial : Material {
         vec3 ep = (p_viewMatrixInverse * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         vec3 Vr = ep - v_worldPosition;
         vec3 V = normalize(Vr);
-        float NoV = abs(dot(N, V));// + 1e-5;
+        float NoV = abs(dot(N, V)) + 1e-5;
 
         ${if (environmentMap && context.meshCubemaps.isNotEmpty()) """
             /*
