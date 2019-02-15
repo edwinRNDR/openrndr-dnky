@@ -1,11 +1,20 @@
 package org.openrndr.dnky
 
+import createLtcMagTexture
+import createLtcMatTexture
 import org.openrndr.color.ColorRGBa
 import org.openrndr.draw.*
+import org.openrndr.math.Matrix44
 import org.openrndr.math.Vector2
 import org.openrndr.math.Vector3
 import org.openrndr.math.Vector4
 import org.openrndr.math.transforms.normalMatrix
+
+data class LightContext(val lights: List<NodeContent<Light>>,
+                        val shadowMaps: Map<ShadowLight, RenderTarget>)
+
+
+data class PostContext(val lightContext: LightContext, val inverseViewMatrix: Matrix44)
 
 data class MaterialContext(val pass: RenderPass,
                            val lights: List<NodeContent<Light>>,
@@ -59,78 +68,44 @@ private fun HemisphereLight.fs(index: Int): String = """
 |}
 """.trimMargin()
 
+private val AreaLight.Companion.ltcMat by lazy { createLtcMatTexture() }
+private val AreaLight.Companion.ltcMag by lazy { createLtcMagTexture() }
+
 private fun AreaLight.fs(index: Int): String = """
 |{
+|   float LUT_SIZE  = 32.0;
+|   float LUT_SCALE = (LUT_SIZE - 1.0)/LUT_SIZE;
+|   float LUT_BIAS  = 0.5/LUT_SIZE;
+|   LTC_Rect rect;
 |   vec3 up = cross(p_lightTangent$index, p_lightDirection$index);
-|   float width = p_lightSize$index.x;
-|   float height = p_lightSize$index.y;
-|   vec3 projection = projectOnPlane(v_worldPosition, p_lightPosition$index, p_lightDirection$index);
-|   vec3 dir = projection - p_lightPosition$index;
-|   vec2 diagonal = vec2(dot(dir,p_lightTangent$index),dot(dir,up));
-|   vec2 nearest2D = vec2(clamp( diagonal.x,-width,width  ),clamp(  diagonal.y,-height,height));
-            ${if (distanceField != null) """
-                vec2 dtc = nearest2D / (vec2(width, height) * 2.0) + vec2(0.5);
-                vec3 ddir = texture(p_lightDistanceField$index, dtc).rgb;
-                ddir.xy /= textureSize(p_lightDistanceField$index, 0);
-                if (ddir.z < 0.5) {
-                    nearest2D += ddir.xy * vec2(width, height);
-                }
-            """.trimIndent() else ""}
-|   vec3 nearestPointInside = p_lightPosition$index + (p_lightTangent$index*nearest2D.x+up*nearest2D.y);
-|   float dist = distance(v_worldPosition, nearestPointInside);
-
-|   float attenuation = 1.0;
-|   float NoL;
-|   {
-|       vec3 L = normalize(nearestPointInside - v_worldPosition);
-|       vec3 H = normalize(V + L);
-|       NoL = clamp(dot(N, L), 0.0, 1.0);
-|       float LoH = clamp(dot(L, H), 0.0, 1.0);
-|       float NoH = clamp(dot(N, H), 0.0, 1.0);
-
-|   float hit = max(dot(-L, p_lightDirection$index), 0.0);
-
-|       if (sideOfPlane(v_worldPosition, p_lightPosition$index, p_lightDirection$index) == 1)
-|       f_diffuse += hit * NoL * (0.1+0.9*attenuation) * Fd_Burley(m_roughness * m_roughness, NoV, NoL, LoH) * p_lightColor$index.rgb * m_color.rgb ;
-    }
-|   if (true) {
-|       vec3 R = reflect(V, N);
-|       vec3 E = linePlaneIntersect(v_worldPosition ,R, p_lightPosition$index, p_lightDirection$index);
-|       float specAngle = dot(R, p_lightDirection$index);
-|       if (specAngle > 0.0) {
-|           vec3 dirSpec = E - p_lightPosition$index;
-|           vec2 dirSpec2D = vec2(dot(dirSpec, p_lightTangent$index), dot(dirSpec,up));
-            float eps = 0.0;
-|           vec2 nearestSpec2D = vec2(clamp( dirSpec2D.x,-width + eps,width-eps  ),clamp(  dirSpec2D.y,-height + eps ,height - eps));
-            ${if (distanceField != null) """
-                vec2 tc = nearestSpec2D / (vec2(width, height) * 2.0) + vec2(0.5);
-                vec3 dir = texture(p_lightDistanceField$index, tc).rgb;
-                dir.xy /= textureSize(p_lightDistanceField$index, 0);
-                if (dir.z == 0.0) {
-                    nearestSpec2D += dir.xy * vec2(width, -height);
-                }
-            """.trimIndent() else ""}
-|           vec3 nearestPointInside = p_lightPosition$index + (p_lightTangent$index*nearestSpec2D.x+up*nearestSpec2D.y);
-|           vec3 L = normalize(nearestPointInside - v_worldPosition); //normalize(nearestPointInside - v_worldPosition);
-|           vec3 H = normalize(V + L);
-|           NoL = clamp(dot(N, L), 0.0, 1.0);
-|           float LoH = clamp(dot(L, H), 0.0, 1.0);
-|           float NoH = clamp(dot(N, H), 0.0, 1.0);
-|           float Dg = D_GGX(m_roughness * m_roughness, NoH, H);
-|           float Vs = V_SmithGGXCorrelated(m_roughness * m_roughness, NoV, NoL);
-|           vec3 F = F_Schlick(m_color * (m_metalness) + 0.04 * (1.0-m_metalness), LoH);
-|           vec3 Fr = (Dg*Vs) * F;
-|           //f_specular += NoL * attenuation * Fr * p_lightColor$index.rgb;
-|           f_specular += attenuation * ggx(N, V, L, m_roughness, m_f0) * p_lightColor$index.rgb * m_color.rgb;
-|           //float sf = max(0.0, dot(-normalize(toLight), p_lightDirection$index));
-|           //float realDist = length(toLight);
-|           //float specDist = length(nearestSpec2D-dirSpec2D);
-|           //float specFactor = exp(-specDist) * exp(-realDist*0.05) * sf; //1.0-clamp(length(nearestSpec2D-dirSpec2D)* (sf*10.0 + 1.0),0.0,1.0);
-            //specFactor =1.0-clamp(length(nearestSpec2D-dirSpec2D), 0.0, 1.0);
-            //f_specular += p_lightColor$index.rgb * specFactor * specAngle * m_color.rgb;
-|       }
-|   }
-
+|   LTC_initRect(rect, p_lightPosition$index*0.1, p_lightTangent$index, up, p_lightDirection$index, p_lightSize$index*0.1);
+|   vec3 points[4];
+|   LTC_initRectPoints(rect, points);
+|   float theta = acos(dot(N, V));
+|   vec2 uv = vec2(m_roughness, theta/(0.5*3.14151925));
+|   uv = uv * LUT_SCALE + LUT_BIAS;
+|    vec4 t = texture(p_ltcMat, uv);
+|    mat3 minv = mat3(
+|            vec3(  1,   0, t.y),
+|            vec3(  0, t.z,   0),
+|            vec3(t.w,   0, t.x)
+|    );
+|    float attenuation = 1.0;
+|   vec3 Lr = p_lightPosition$index - v_worldPosition;
+|   vec3 L = normalize(Lr);
+|   float NoL = dot(N, L);
+|   ${shadows.fs(index)}
+|
+|    vec3 diffColor = m_color*(1.0 - m_metalness);
+|    vec3 specColor = mix(vec3(0.04, 0.04, 0.04), m_color, m_metalness);
+|
+|    vec3 specular = LTC_Evaluate(N, V, v_worldPosition*0.1, minv, points, false);
+|    vec2 schlick = texture(p_ltcMag, uv).xy;
+|    vec3 diffuse = LTC_Evaluate(N, V, v_worldPosition*0.1, mat3(1), points, false);
+|    specular /= 2.0 * 3.141592654;
+|    diffuse /= 2.0 * 3.141592654;
+|    f_specular += (attenuation * specular * p_lightColor$index.rgb) * (specColor*schlick.x + (1.0-specColor)*schlick.y);
+|    f_diffuse += attenuation *diffuse * p_lightColor$index.rgb * diffColor;
 |}
 """.trimIndent()
 
@@ -281,9 +256,11 @@ class BasicMaterial : Material {
     override fun generateShadeStyle(context: MaterialContext): ShadeStyle {
         val needLight = needLight(context)
 
+        val needLTC = context.lights.any { it.content is AreaLight }
+
         val preambleFS = """
             vec3 m_color = p_color.rgb;
-            float m_f0 = 1.5;
+            float m_f0 = 0.5;
             float m_roughness = p_roughness;
             float m_metalness = p_metalness;
             float m_ambientOcclusion = 1.0;
@@ -391,6 +368,7 @@ class BasicMaterial : Material {
 
         return shadeStyle {
             fragmentPreamble = """
+            |${if(needLTC) ltcShaders else ""}
             |$shaderLinePlaneIntersect
             |$shaderProjectOnPlane
             |$shaderSideOfPlane
@@ -514,6 +492,8 @@ class BasicMaterial : Material {
                     }
 
                     is AreaLight -> {
+                        shadeStyle.parameter("ltcMat", AreaLight.ltcMat)
+                        shadeStyle.parameter("ltcMag", AreaLight.ltcMag)
                         shadeStyle.parameter("lightPosition$index", (node.worldTransform * Vector4.UNIT_W).xyz)
                         shadeStyle.parameter("lightDirection$index", ((normalMatrix(node.worldTransform)) * Vector3(0.0, 0.0, 1.0)).normalized)
                         shadeStyle.parameter("lightTangent$index", ((normalMatrix(node.worldTransform)) * Vector3(1.0, 0.0, 0.0)).normalized)
@@ -521,6 +501,21 @@ class BasicMaterial : Material {
 
                         light.distanceField?.let {
                             shadeStyle.parameter("lightDistanceField$index", it)
+                        }
+                        if (light.shadows is Shadows.MappedShadows) {
+                            context.shadowMaps[light]?.let {
+                                val look = light.view(node)
+                                shadeStyle.parameter("lightTransform$index",
+                                        light.projection(it) * look)
+
+                                if (light.shadows is Shadows.DepthMappedShadows) {
+                                    shadeStyle.parameter("lightShadowMap$index", it.depthBuffer ?: TODO())
+                                }
+
+                                if (light.shadows is Shadows.ColorMappedShadows) {
+                                    shadeStyle.parameter("lightShadowMap$index", it.colorBuffer(0))
+                                }
+                            }
                         }
                     }
                 }

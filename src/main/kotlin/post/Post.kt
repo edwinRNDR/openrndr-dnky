@@ -1,5 +1,7 @@
 package org.openrndr.dnky.post
 
+import org.openrndr.dnky.LightContext
+import org.openrndr.dnky.PostContext
 import org.openrndr.draw.*
 
 class PostStep(val outputScale: Double,
@@ -8,9 +10,9 @@ class PostStep(val outputScale: Double,
                val output: String,
                val outputFormat: ColorFormat,
                val outputType: ColorType,
-               val update: (Filter.() -> Unit)? = null) {
+               val update: (Filter.(PostContext) -> Unit)? = null) {
 
-    fun apply(buffers: MutableMap<String, ColorBuffer>) {
+    fun apply(buffers: MutableMap<String, ColorBuffer>, postContext: PostContext) {
         val inputBuffers = inputs.map { buffers[it]!! }
         val outputBuffer = buffers.getOrPut(output) {
             colorBuffer((inputBuffers[0].width * outputScale).toInt(),
@@ -18,7 +20,7 @@ class PostStep(val outputScale: Double,
                     format = outputFormat,
                     type = outputType)
         }
-        update?.invoke(filter)
+        update?.invoke(filter, postContext)
         filter.apply(inputBuffers.toTypedArray(), outputBuffer)
     }
 }
@@ -29,10 +31,10 @@ class PostStepBuilder<T : Filter>(val filter: T) {
     var output = "untitled"
     var outputFormat = ColorFormat.RGBa
     var outputType = ColorType.UINT8
-    var update: (T.() -> Unit)? = null
+    var update: (T.(PostContext) -> Unit)? = null
 
     internal fun build(): PostStep {
-        return PostStep(outputScale, filter, inputs, output, outputFormat, outputType, update as (Filter.() -> Unit)?)
+        return PostStep(outputScale, filter, inputs, output, outputFormat, outputType, update as (Filter.(PostContext) -> Unit)?)
     }
 }
 

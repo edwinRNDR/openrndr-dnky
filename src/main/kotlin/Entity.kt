@@ -94,7 +94,6 @@ interface AttenuatedLight {
     var constantAttenuation: Double
     var linearAttenuation: Double
     var quadraticAttenuation: Double
-
 }
 
 class DirectionalLight(var direction: Vector3 = Vector3.UNIT_Z, override var shadows: Shadows = Shadows.None) : Light(), ShadowLight {
@@ -118,6 +117,7 @@ class SpotLight(var direction: Vector3 = Vector3.UNIT_Z, var innerAngle: Double 
 }
 
 class AreaLight : Light(), ShadowLight, AttenuatedLight {
+    companion object;
     override var constantAttenuation = 1.0
     override var linearAttenuation = 0.0
     override var quadraticAttenuation = 0.0
@@ -126,7 +126,8 @@ class AreaLight : Light(), ShadowLight, AttenuatedLight {
     var distanceField: ColorBuffer? = null
     override var shadows: Shadows = Shadows.None
     override fun projection(renderTarget: RenderTarget): Matrix44 {
-        return ortho(-width / 2.0, width / 2.0, -height / 2.0, height / 2.0, 0.0, 1000.0)
+        val outerAngle = 45.0
+        return perspective(outerAngle * 2.0, renderTarget.width * 1.0 / renderTarget.height, 1.0, 150.0)
     }
 }
 

@@ -9,7 +9,7 @@ fun Shadows.VSM.fs(index: Int) : String = """
 |       attenuation *= (chebyshevUpperBound(moments, length(Lr), 50.0));
 |   }
 |}
-""".trimIndent()
+""".trimMargin()
 
 fun Shadows.Simple.fs(index: Int): String = """
 |{
@@ -26,7 +26,7 @@ fun Shadows.Simple.fs(index: Int): String = """
 |       attenuation *= shadow;
 |   }
 |}
-""".trimIndent()
+""".trimMargin()
 
 fun Shadows.PCF.fs(index: Int): String = """
 |{
@@ -65,7 +65,7 @@ fun Shadows.PCF.fs(index: Int): String = """
 |       attenuation *= shadow;
 |   }
 |}
-""".trimIndent()
+""".trimMargin()
 
 fun Shadows.fs(index: Int): String = when (this) {
     is Shadows.PCF -> this.fs(index)

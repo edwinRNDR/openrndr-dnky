@@ -4,6 +4,7 @@ import org.openrndr.color.ColorRGBa
 import org.openrndr.dnky.post.*
 import org.openrndr.draw.ColorFormat
 import org.openrndr.draw.ColorType
+import post.VolumetricLights
 
 class PhotographicRenderer(val renderer: SceneRenderer) {
     var exposure = 1.0
@@ -27,7 +28,7 @@ class PhotographicRenderer(val renderer: SceneRenderer) {
  * The photographic renderer uses screen space ambient occlusion, screen space reflections
  * depth of field and tone mapping post processing steps.
  */
-fun photographicRenderer(): PhotographicRenderer {
+fun photographicRenderer(volumetricPost:Boolean = false): PhotographicRenderer {
     val sr = SceneRenderer()
 
     val pr = PhotographicRenderer(sr)
@@ -62,6 +63,21 @@ fun photographicRenderer(): PhotographicRenderer {
                 density = pr.fogDensity
                 power = pr.fogPower
                 color = pr.fogColor
+            }
+        }
+
+        if (volumetricPost) {
+            postSteps += postStep(VolumetricLights()) {
+                inputs += "fog"
+                inputs += "viewPosition"
+                output = "fog"
+
+                outputFormat = ColorFormat.RGBa
+                outputType = ColorType.FLOAT16
+                update = {
+                    context = it.lightContext
+                    inverseViewMatrix = it.inverseViewMatrix
+                }
             }
         }
 

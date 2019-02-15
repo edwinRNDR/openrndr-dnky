@@ -269,6 +269,11 @@ class SceneRenderer {
                     buffers[combiner.targetOutput] = output.colorBuffer(combiner.targetOutput)
                 }
             }
+
+
+            val lightContext = LightContext(lights, shadowLightTargets)
+            val postContext = PostContext(lightContext, drawer.view.inversed)
+
             for (postStep in postSteps) {
                 if (postStep.filter is Ssao) {
                     postStep.filter.projection = drawer.projection
@@ -279,7 +284,7 @@ class SceneRenderer {
                     postStep.filter.projection = p //drawer.projection
                 }
 
-                postStep.apply(buffers)
+                postStep.apply(buffers, postContext)
             }
         }
 

@@ -1,5 +1,40 @@
+package org.openrndr.dnky
 
 val ltcShaders = """
+
+struct LTC_Rect {
+    vec3  center;
+    vec3  dirx;
+    vec3  diry;
+    float halfx;
+    float halfy;
+    vec4  plane;
+};
+
+void LTC_initRect(out LTC_Rect rect, vec3 position, vec3 right, vec3 up, vec3 dir, vec2 size) {
+    rect.dirx = right;
+    rect.diry = up;
+
+    rect.center = position;
+    rect.halfx  = size.x;
+    rect.halfy  = size.y;
+
+    vec3 rectNormal = dir;
+    rect.plane = vec4(rectNormal, -dot(rectNormal, rect.center));
+}
+
+void LTC_initRectPoints(LTC_Rect rect, out vec3 points[4])
+{
+    vec3 ex = rect.halfx*rect.dirx;
+    vec3 ey = rect.halfy*rect.diry;
+
+    points[0] = rect.center - ex - ey;
+    points[1] = rect.center + ex - ey;
+    points[2] = rect.center + ex + ey;
+    points[3] = rect.center - ex + ey;
+}
+
+
 float LTC_integrateEdge(vec3 v1, vec3 v2) {
     float cosTheta = dot(v1, v2);
     float theta = acos(cosTheta);
@@ -128,17 +163,18 @@ vec3 LTC_Evaluate(
     T2 = cross(N, T1);
 
     // rotate area light in (T1, T2, N) basis
-    Minv = mul(Minv, transpose(mat3(T1, T2, N)));
+    //Minv = mul(Minv, transpose(mat3(T1, T2, N)));
+    Minv = Minv * transpose(mat3(T1, T2, N));
 
     // polygon (allocate 5 vertices for clipping)
     vec3 L[5];
-    L[0] = mul(Minv, points[0] - P);
-    L[1] = mul(Minv, points[1] - P);
-    L[2] = mul(Minv, points[2] - P);
-    L[3] = mul(Minv, points[3] - P);
+    L[0] = Minv * (points[0] - P);
+    L[1] = Minv * (points[1] - P);
+    L[2] = Minv * (points[2] - P);
+    L[3] = Minv * (points[3] - P);
 
     int n;
-    ClipQuadToHorizon(L, n);
+    LTC_clipQuadToHorizon(L, n);
 
     if (n == 0)
         return vec3(0, 0, 0);
@@ -153,13 +189,13 @@ vec3 LTC_Evaluate(
     // integrate
     float sum = 0.0;
 
-    sum += IntegrateEdge(L[0], L[1]);
-    sum += IntegrateEdge(L[1], L[2]);
-    sum += IntegrateEdge(L[2], L[3]);
+    sum += LTC_integrateEdge(L[0], L[1]);
+    sum += LTC_integrateEdge(L[1], L[2]);
+    sum += LTC_integrateEdge(L[2], L[3]);
     if (n >= 4)
-        sum += IntegrateEdge(L[3], L[4]);
+        sum += LTC_integrateEdge(L[3], L[4]);
     if (n == 5)
-        sum += IntegrateEdge(L[4], L[0]);
+        sum += LTC_integrateEdge(L[4], L[0]);
 
     sum = twoSided ? abs(sum) : max(0.0, sum);
 

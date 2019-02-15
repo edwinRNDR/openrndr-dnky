@@ -12,12 +12,17 @@ repositories {
     maven {
         url="https://dl.bintray.com/openrndr/openrndr"
     }
+    maven { url 'https://jitpack.io' }
+
 }
 
-ext.openrndr_version = "0.3.32-rc1"
+ext.openrndr_version = "0.3.32-rc4"
 dependencies {
     compile "org.openrndr:openrndr-core:$openrndr_version"
+    compile "org.openrndr:openrndr-gl3:$openrndr_version"
+    runtime "org.openrndr:openrndr-gl3-natives-windows:$openrndr_version"
     compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+    compile 'com.github.kotlin-graphics:gli:v0.8.3.0-build-11'
 }
 
 compileKotlin {
