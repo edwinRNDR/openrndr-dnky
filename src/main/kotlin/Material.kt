@@ -239,6 +239,7 @@ class BasicMaterial : Material {
     var parameters = mutableMapOf<String, Any>()
     var textures = mutableListOf<Texture>()
 
+    val shadeStyles = mutableMapOf<MaterialContext, ShadeStyle>()
 
     fun copy() : BasicMaterial {
         var copied = BasicMaterial()
@@ -254,11 +255,15 @@ class BasicMaterial : Material {
     }
 
     override fun generateShadeStyle(context: MaterialContext): ShadeStyle {
-        val needLight = needLight(context)
 
-        val needLTC = context.lights.any { it.content is AreaLight }
 
-        val preambleFS = """
+        val cached = shadeStyles.getOrPut(context) {
+            println("creating shadestyle for $this + ${context.hashCode()}")
+            val needLight = needLight(context)
+
+            val needLTC = context.lights.any { it.content is AreaLight }
+
+            val preambleFS = """
             vec3 m_color = p_color.rgb;
             float m_f0 = 0.5;
             float m_roughness = p_roughness;
@@ -270,48 +275,48 @@ class BasicMaterial : Material {
             vec3 f_worldNormal = v_worldNormal;
         """.trimIndent()
 
-        val textureFs = if (needLight) {
-            (textures.mapIndexed { index, it ->
-                when (val source = it.source) {
-                    DummySource -> "vec4 tex$index = vec4(1.0);"
-                    is ModelCoordinates -> source.fs(index)
-                    is Triplanar -> source.fs(index, it.target)
-                    is TextureFromCode -> source.fs(index, it.target)
-                    else -> TODO()
-                }
-            } + textures.mapIndexed { index, texture ->
-                when (texture.target) {
-                    TextureTarget.NONE -> ""
-                    TextureTarget.COLOR -> "m_color.rgb *= pow(tex$index.rgb, vec3(2.2));"
-                    TextureTarget.METALNESS -> "m_metalness = tex$index.r;"
-                    TextureTarget.ROUGNESS -> "m_roughness = tex$index.r;"
-                    TextureTarget.EMISSION -> "m_emission += tex$index.rgb;"
-                    TextureTarget.NORMAL -> "f_worldNormal = normalize((v_modelNormalMatrix * vec4(tex$index.xyz,0.0)).xyz);"
-                    TextureTarget.AMBIENT_OCCLUSION -> "m_ambientOcclusion *= tex$index.r;"
-                    is TextureTarget.Height -> ""
-                }
-            }).joinToString("\n")
-        } else ""
+            val textureFs = if (needLight) {
+                (textures.mapIndexed { index, it ->
+                    when (val source = it.source) {
+                        DummySource -> "vec4 tex$index = vec4(1.0);"
+                        is ModelCoordinates -> source.fs(index)
+                        is Triplanar -> source.fs(index, it.target)
+                        is TextureFromCode -> source.fs(index, it.target)
+                        else -> TODO()
+                    }
+                } + textures.mapIndexed { index, texture ->
+                    when (texture.target) {
+                        TextureTarget.NONE -> ""
+                        TextureTarget.COLOR -> "m_color.rgb *= pow(tex$index.rgb, vec3(2.2));"
+                        TextureTarget.METALNESS -> "m_metalness = tex$index.r;"
+                        TextureTarget.ROUGNESS -> "m_roughness = tex$index.r;"
+                        TextureTarget.EMISSION -> "m_emission += tex$index.rgb;"
+                        TextureTarget.NORMAL -> "f_worldNormal = normalize((v_modelNormalMatrix * vec4(tex$index.xyz,0.0)).xyz);"
+                        TextureTarget.AMBIENT_OCCLUSION -> "m_ambientOcclusion *= tex$index.r;"
+                        is TextureTarget.Height -> ""
+                    }
+                }).joinToString("\n")
+            } else ""
 
 
-        val displacers = textures.filter { it.target is TextureTarget.Height }
+            val displacers = textures.filter { it.target is TextureTarget.Height }
 
-        val textureVS = if (displacers.isNotEmpty()) textures.mapIndexed { index, it ->
-            if (it.target is TextureTarget.Height) {
-                when (val source = it.source) {
-                    DummySource -> "vec4 tex$index = vec4(1.0);"
-                    is ModelCoordinates -> source.fs(index)
-                    is Triplanar -> source.fs(index, it.target)
-                    is TextureFromCode -> source.fs(index, it.target)
-                    else -> TODO()
-                } + """
+            val textureVS = if (displacers.isNotEmpty()) textures.mapIndexed { index, it ->
+                if (it.target is TextureTarget.Height) {
+                    when (val source = it.source) {
+                        DummySource -> "vec4 tex$index = vec4(1.0);"
+                        is ModelCoordinates -> source.fs(index)
+                        is Triplanar -> source.fs(index, it.target)
+                        is TextureFromCode -> source.fs(index, it.target)
+                        else -> TODO()
+                    } + """
                 x_position += x_normal * tex$index.r * p_textureHeightScale$index;
             """.trimIndent()
-            } else ""
-        }.joinToString("\n") else ""
+                } else ""
+            }.joinToString("\n") else ""
 
-        val lights = context.lights
-        val lightFS = if (needLight) """
+            val lights = context.lights
+            val lightFS = if (needLight) """
         vec3 f_diffuse = vec3(0.0);
         vec3 f_specular = vec3(0.0);
         vec3 f_emission = m_emission;
@@ -338,53 +343,55 @@ class BasicMaterial : Material {
         """.trimIndent() else ""}
 
         ${lights.mapIndexed { index, (node, light) ->
-            when (light) {
-                is AmbientLight -> light.fs(index)
-                is PointLight -> light.fs(index)
-                is SpotLight -> light.fs(index)
-                is DirectionalLight -> light.fs(index)
-                is HemisphereLight -> light.fs(index)
-                is AreaLight -> light.fs(index)
-                else -> TODO()
-            }
-        }.joinToString("\n")}
+                when (light) {
+                    is AmbientLight -> light.fs(index)
+                    is PointLight -> light.fs(index)
+                    is SpotLight -> light.fs(index)
+                    is DirectionalLight -> light.fs(index)
+                    is HemisphereLight -> light.fs(index)
+                    is AreaLight -> light.fs(index)
+                    else -> TODO()
+                }
+            }.joinToString("\n")}
 
         ${context.fogs.mapIndexed { index, (node, fog) ->
-            fog.fs(index)
-        }.joinToString("\n")}
+                fog.fs(index)
+            }.joinToString("\n")}
 
 
 
     """.trimIndent() else ""
 
-        val rt = RenderTarget.active
+            val rt = RenderTarget.active
 
-        val combinerFS = context.pass.combiners.map {
-            it.generateShader()
-        }.joinToString("\n")
+            val combinerFS = context.pass.combiners.map {
+                it.generateShader()
+            }.joinToString("\n")
 
-        val fs = preambleFS + textureFs + lightFS + combinerFS
-        val vs = (this@BasicMaterial.vertexTransform ?: "") + textureVS
+            val fs = preambleFS + textureFs + lightFS + combinerFS
+            val vs = (this@BasicMaterial.vertexTransform ?: "") + textureVS
 
-        return shadeStyle {
-            fragmentPreamble = """
-            |${if(needLTC) ltcShaders else ""}
+            shadeStyle {
+                fragmentPreamble = """
+            |${if (needLTC) ltcShaders else ""}
             |$shaderLinePlaneIntersect
             |$shaderProjectOnPlane
             |$shaderSideOfPlane
             |$shaderGGX
             |$shaderVSM
             """.trimMargin()
-            this.suppressDefaultOutput = true
-            this.vertexTransform = vs
-            fragmentTransform = fs
-            context.pass.combiners.map {
-                if (rt.colorBuffers.size <= 1) {
-                    this.output(it.targetOutput, 0)
-                } else
-                    this.output(it.targetOutput, rt.colorBufferIndex(it.targetOutput))
+                this.suppressDefaultOutput = true
+                this.vertexTransform = vs
+                fragmentTransform = fs
+                context.pass.combiners.map {
+                    if (rt.colorBuffers.size <= 1) {
+                        this.output(it.targetOutput, 0)
+                    } else
+                        this.output(it.targetOutput, rt.colorBufferIndex(it.targetOutput))
+                }
             }
         }
+        return cached
     }
 
     private fun needLight(context: MaterialContext): Boolean {
@@ -562,3 +569,9 @@ fun BasicMaterial.texture(init: Texture.() -> Unit): Texture {
 }
 
 fun MeshBase.basicMaterial(init: BasicMaterial.() -> Unit): BasicMaterial = material(init)
+fun LineMesh.basicMaterial(init: BasicMaterial.() -> Unit): BasicMaterial {
+    val t = BasicMaterial()
+    t.init()
+    material = t
+    return t
+}

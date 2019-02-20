@@ -9,6 +9,22 @@ class Scene(val root: SceneNode = SceneNode(),
 class NodeContent<T : Entity>(val node: SceneNode, val content: T) {
     operator fun component1() = node
     operator fun component2() = content
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+        other as NodeContent<*>
+        if (node != other.node) return false
+        if (content != other.content) return false
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = node.hashCode()
+        result = 31 * result + content.hashCode()
+        return result
+    }
+
+
 }
 
 open class SceneNode(var entities: MutableList<Entity> = mutableListOf()) {
@@ -93,6 +109,13 @@ fun SceneNode.mesh(init: Mesh.() -> Unit): Mesh {
     mesh.init()
     entities.add(mesh)
     return mesh
+}
+
+fun SceneNode.lineMesh(init: LineMesh.() -> Unit): LineMesh {
+    val lm = LineMesh(emptyList(), emptyList(), DefaultMaterial)
+    lm.init()
+    entities.add(lm)
+    return lm
 }
 
 fun SceneNode.instancedMesh(init: InstancedMesh.() -> Unit): InstancedMesh {

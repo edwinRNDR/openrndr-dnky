@@ -50,6 +50,8 @@ class InstancedMesh(geometry: Geometry,
                     var instances: Int,
                     var attributes: List<VertexBuffer>) : MeshBase(geometry, material)
 
+class LineMesh(var segments: List<List<Vector3>>, var weights:List<Double>, var material: Material) : Entity()
+
 /** Light entity */
 abstract class Light : Entity() {
     var color: ColorRGBa = ColorRGBa.WHITE
@@ -69,8 +71,8 @@ class AmbientLight : Light()
 sealed class Shadows {
     object None : Shadows()
     abstract class MappedShadows(val mapSize: Int) : Shadows()
-    abstract class DepthMappedShadows(mapSize:Int): MappedShadows(mapSize)
-    abstract class ColorMappedShadows(mapSize:Int): MappedShadows(mapSize)
+    abstract class DepthMappedShadows(mapSize: Int) : MappedShadows(mapSize)
+    abstract class ColorMappedShadows(mapSize: Int) : MappedShadows(mapSize)
     class Simple(mapSize: Int = 1024) : DepthMappedShadows(mapSize)
     class PCF(mapSize: Int = 1024, val sampleCount: Int = 12) : DepthMappedShadows(mapSize)
     class VSM(mapSize: Int = 1024) : ColorMappedShadows(mapSize)

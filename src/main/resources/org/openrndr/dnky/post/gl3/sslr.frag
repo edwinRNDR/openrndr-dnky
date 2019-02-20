@@ -303,7 +303,7 @@ void main() {
             projection,
             positions,
             ts,
-            4.0,
+            0.2,
             0.0,
             4.0, // stride
             1.0,

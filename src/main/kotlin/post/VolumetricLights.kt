@@ -48,57 +48,52 @@ ${context.lights.mapIndexed { index, it ->
 |result /= (4.0f * 3.1415926535 * pow(1.0f + G_SCATTERING * G_SCATTERING - (2.0f * G_SCATTERING) *      lightDotView, 1.5f));
 |return result;
 |}
-|struct Ray
-|{
-|    vec3 o;		// origin
-|    vec3 d;		// direction
-|};
-|
-|struct Hit
-|{
-|    float t0;	// solution to p=o+t*d
-|    float t1;
-|};
-|struct Cone
-|{
-|	float cosa;	// half cone angle
-|   float h;	// height
-|   vec3 c;		// tip position
-|   vec3 v;		// axis
-|};
-|
-|const Hit noHit = Hit(100000, 100000);
-|Hit intersectCone(Cone s, Ray r)
-|{
-|    vec3 co = r.o - s.c;
-|
-|    float a = dot(r.d,s.v)*dot(r.d,s.v) - s.cosa*s.cosa;
-|    float b = 2. * (dot(r.d,s.v)*dot(co,s.v) - dot(r.d,co)*s.cosa*s.cosa);
-|    float c = dot(co,s.v)*dot(co,s.v) - dot(co,co)*s.cosa*s.cosa;
-|
-|    float det = b*b - 4.*a*c;
-|    if (det < 0.) return noHit;
-|
-|    det = sqrt(det);
-|    float t1 = (-b - det) / (2. * a);
-|    float t2 = (-b + det) / (2. * a);
-|
-|    // This is a bit messy; there ought to be a more elegant solution.
-|    float t = t1;
-|    if (t < 0. || t2 > 0. && t2 < t) t = t2;
-|    if (t < 0.) return noHit;
-|
-|    vec3 cp1 = r.o + t1 * r.d - s.c;
-|    vec3 cp2 = r.o + t2 * r.d - s.c;
-|    vec3 cpt = r.o + t * r.d - s.c;
-|    float h = dot(cpt, s.v);
-|    if (h < 0. || h > s.h) return noHit;
-|
-|
-|
-|    return Hit(t1, t2);
-|}
-|vec3 accumulateVSM(vec3 from, vec3 to, int steps000, vec3 lightPosition, mat4 lightMatrix, sampler2D lightMap, vec3 lightColor) {
+float dot2( in vec3 v ) { return dot(v,v); }
+
+vec4 iCappedCone( in vec3  ro, in vec3  rd,
+                  in vec3  pa, in vec3  pb,
+                  in float ra, in float rb, out float near, out float far )
+{
+    vec3  ba = pb - pa;
+    vec3  oa = ro - pa;
+    vec3  ob = ro - pb;
+
+    float baba = dot(ba,ba);
+    float rdba = dot(rd,ba);
+    float oaba = dot(oa,ba);
+    float obba = dot(ob,ba);
+
+
+    // body
+    float rr = rb - ra;
+    float hy = baba + rr*rr;
+    vec3  oc = oa*rb - ob*ra;
+
+    float ocba = dot(oc,ba);
+    float ocrd = dot(oc,rd);
+    float ococ = dot(oc,oc);
+
+    float k2 = baba*baba      - hy*rdba*rdba; // the gap is rdrd which is 1.0
+    float k1 = baba*baba*ocrd - hy*rdba*ocba;
+    float k0 = baba*baba*ococ - hy*ocba*ocba;
+
+    float h = k1*k1 - k2*k0;
+    if( h<0.0 ) return vec4(-1.0);
+
+    float t = (-k1-sign(rr)*sqrt(h))/(k2*rr);
+
+    float y = oaba + t*rdba;
+    if( y<baba )
+    {
+        near = t;
+        far = (-k1+sign(rr)*sqrt(h))/(k2*rr);
+        return vec4(t, normalize(baba*(baba*(oa+t*rd)-rr*ba*ra)
+                                 -ba*hy*y));
+    }
+    return vec4(-1.0);
+}
+
+|vec3 accumulateVSM(vec3 from, vec3 to, vec3 lightPosition, mat4 lightMatrix, sampler2D lightMap, vec3 lightColor) {
 |   vec3 ray = to - from;
 |   vec3 rayDirection = normalize(ray);
 |   vec3 rayStep = rayDirection;
@@ -139,8 +134,8 @@ ${context.lights.mapIndexed { index, it ->
 |
 |       //acc += vec3(1.0/64.0) * lightColor * attenuation ;//(scatteringConst /  (4.0f * 3.141592 * pow(1.0 + scattering * scattering - (2.0 * scattering) * VoL, 1.5))) * lightColor;
 |       acc += 0.1*scatter(VoL) * lightColor * attenuation;
-|       position += rayStep*0.25;
-|       lightW += lightStep*0.25;
+|       position += rayStep;
+|       lightW += lightStep;
 |   }
 |   return acc;
 |}
@@ -152,13 +147,21 @@ ${context.lights.mapIndexed { index, it ->
         if (it.content is ShadowLight && it.content is SpotLight) {
             if (it.content.shadows is Shadows.VSM) {
                 """ {
-                    Cone cone = Cone(p_lightOuterCos$index, 1500.0, p_lightPosition$index, p_lightDirection$index);
-
                     vec3 viewPosition = texture(tex1, v_texCoord0).xyz;
                     vec3 worldPosition = (u_inverseViewMatrix * vec4(viewPosition, 1.0)).xyz;
                     vec3 origin = (u_inverseViewMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 
-                    acc += accumulateVSM(origin, worldPosition,32, p_lightPosition$index, p_lightTransform$index, p_lightShadowMap$index, p_lightColor$index.rgb);
+                    vec3 direction = normalize(worldPosition-origin);
+                    float near;
+                    float far;
+                    vec4 it = iCappedCone(origin, direction, p_lightPosition$index, p_lightPosition$index+p_lightDirection$index*150.0, 0.0, 0.5/p_lightOuterCos$index*150.0, near, far);
+
+                    near = max(0, near);
+                    far = max(0, far);
+                    if (it.x > 0.0) {
+                    //acc+=vec3(1.0, 0.0, 0.0);
+                    acc += accumulateVSM(origin + near * direction, origin + far * direction, p_lightPosition$index, p_lightTransform$index, p_lightShadowMap$index, p_lightColor$index.rgb);
+                    }
                     }
                 """.trimIndent()
             } else {

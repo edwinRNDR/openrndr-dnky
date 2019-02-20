@@ -60,7 +60,6 @@ class MaterialFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE),
 class BaseColorFacet : ColorBufferFacetCombiner( setOf(FacetType.COLOR),
         "baseColor", ColorFormat.RGB, ColorType.UINT8) {
     override fun generateShader(): String = "o_$targetOutput = vec4(m_color.rgb, 1.0);"
-
 }
 
 class DiffuseFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE),
@@ -164,6 +163,7 @@ class SceneRenderer {
         val meshes = scene.root.findContent { this as? Mesh }
         val fogs = scene.root.findContent { this as? Fog }
         val instancedMeshes = scene.root.findContent { this as? InstancedMesh }
+        val lineMeshes = scene.root.findContent { this as? LineMesh }
         val environmentMapMeshes = meshes.filter { (it.content.material as? BasicMaterial)?.environmentMap == true }
 
         run {
@@ -195,7 +195,7 @@ class SceneRenderer {
 
                     drawer.background(ColorRGBa.PINK)
                     drawer.cullTestPass = CullTestPass.BACK
-                    drawPass(drawer, materialContext, meshes, instancedMeshes)
+                    drawPass(drawer, materialContext, meshes, instancedMeshes, lineMeshes)
                 }
                 when (shadowLight.shadows) {
                     is Shadows.VSM -> {
@@ -230,7 +230,7 @@ class SceneRenderer {
                     drawer.view = Matrix44.IDENTITY
                     drawer.model = Matrix44.IDENTITY
                     drawer.lookAt(position, position + side.forward, side.up)
-                    drawPass(drawer, materialContext, meshes - content, instancedMeshes)
+                    drawPass(drawer, materialContext, meshes - content, instancedMeshes, lineMeshes)
                 }
                 cubemap.generateMipmaps()
                 target.detachColorBuffers()
@@ -253,7 +253,7 @@ class SceneRenderer {
                 }
             }
             outputPassTarget?.bind()
-            drawPass(drawer, materialContext, meshes, instancedMeshes)
+            drawPass(drawer, materialContext, meshes, instancedMeshes, lineMeshes)
             val drawNodes = scene.root.findNodes { drawFunction != null }
             outputPassTarget?.unbind()
 
@@ -269,7 +269,6 @@ class SceneRenderer {
                     buffers[combiner.targetOutput] = output.colorBuffer(combiner.targetOutput)
                 }
             }
-
 
             val lightContext = LightContext(lights, shadowLightTargets)
             val postContext = PostContext(lightContext, drawer.view.inversed)
@@ -303,7 +302,10 @@ class SceneRenderer {
         }
     }
 
-    private fun drawPass(drawer: Drawer, materialContext: MaterialContext, meshes: List<NodeContent<Mesh>>, instancedMeshes: List<NodeContent<InstancedMesh>>) {
+    private fun drawPass(drawer: Drawer, materialContext: MaterialContext,
+                         meshes: List<NodeContent<Mesh>>,
+                         instancedMeshes: List<NodeContent<InstancedMesh>>,
+                         lineMeshes: List<NodeContent<LineMesh>>) {
         meshes.forEach {
             val mesh = it.content
             drawer.isolated {
@@ -333,6 +335,21 @@ class SceneRenderer {
                         mesh.instances,
                         mesh.geometry.offset,
                         mesh.geometry.vertexCount)
+            }
+        }
+
+        lineMeshes.forEach {
+            val mesh = it.content
+            drawer.isolated {
+                val shadeStyle = mesh.material.generateShadeStyle(materialContext)
+                shadeStyle.parameter("viewMatrixInverse", drawer.view.inversed)
+                drawer.drawStyle.cullTestPass = CullTestPass.ALWAYS
+                mesh.material.applyToShadeStyle(materialContext, shadeStyle, mesh)
+                drawer.shadeStyle = shadeStyle
+                drawer.model = it.node.worldTransform
+
+                drawer.lineStrips(it.content.segments, it.content.weights)
+
             }
         }
     }
