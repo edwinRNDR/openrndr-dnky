@@ -16,7 +16,7 @@ repositories {
 
 }
 
-ext.openrndr_version = "0.3.32-rc4"
+ext.openrndr_version = "0.3.33-rc1"
 dependencies {
     compile "org.openrndr:openrndr-core:$openrndr_version"
     compile "org.openrndr:openrndr-gl3:$openrndr_version"
