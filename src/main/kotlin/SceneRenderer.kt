@@ -33,7 +33,6 @@ abstract class ColorBufferFacetCombiner(facets: Set<FacetType>,
                                         val format: ColorFormat,
                                         val type: ColorType) : FacetCombiner(facets, targetOutput)
 
-
 class MomentsFacet: ColorBufferFacetCombiner( setOf(FacetType.WORLD_POSITION), "moments", ColorFormat.RG, ColorType.FLOAT16) {
     override fun generateShader(): String {
         return """
@@ -263,6 +262,7 @@ class SceneRenderer {
                     it.drawFunction?.invoke(drawer)
                 }
             }
+
 
             outputPassTarget?.let { output ->
                 for (combiner in outputPass.combiners) {
