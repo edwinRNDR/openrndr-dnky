@@ -50,7 +50,7 @@ class InstancedMesh(geometry: Geometry,
                     var instances: Int,
                     var attributes: List<VertexBuffer>) : MeshBase(geometry, material)
 
-class LineMesh(var segments: List<List<Vector3>>, var weights:List<Double>, var material: Material) : Entity()
+class LineMesh(var segments: List<List<Vector3>>, var weights:List<Double>, var colors:List<ColorRGBa>, var material: Material) : Entity()
 
 /** Light entity */
 abstract class Light : Entity() {

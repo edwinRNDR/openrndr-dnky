@@ -271,6 +271,7 @@ class BasicMaterial : Material {
             float m_ambientOcclusion = 1.0;
             vec3 m_emission = p_emission.rgb;
             vec3 m_normal = vec3(0.0, 0.0, 1.0);
+            float f_alpha = 1.0;
             vec4 f_fog = vec4(0.0, 0.0, 0.0, 0.0);
             vec3 f_worldNormal = v_worldNormal;
         """.trimIndent()

@@ -112,7 +112,7 @@ fun SceneNode.mesh(init: Mesh.() -> Unit): Mesh {
 }
 
 fun SceneNode.lineMesh(init: LineMesh.() -> Unit): LineMesh {
-    val lm = LineMesh(emptyList(), emptyList(), DefaultMaterial)
+    val lm = LineMesh(emptyList(), emptyList(), emptyList(), DefaultMaterial)
     lm.init()
     entities.add(lm)
     return lm

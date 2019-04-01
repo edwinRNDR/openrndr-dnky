@@ -103,6 +103,7 @@ class LDRColorFacet : ColorBufferFacetCombiner(setOf(FacetType.DIFFUSE, FacetTyp
     override fun generateShader() = """
     vec3 oofinalColor =  (f_diffuse.rgb + f_specular.rgb + f_emission.rgb) * (1.0 - f_fog.a) + f_fog.rgb * f_fog.a;
     o_$targetOutput.rgba = pow(vec4(oofinalColor, 1.0), vec4(1.0/2.2));
+    o_$targetOutput.a = f_alpha;
     """
 }
 
@@ -263,7 +264,6 @@ class SceneRenderer {
                 }
             }
 
-
             outputPassTarget?.let { output ->
                 for (combiner in outputPass.combiners) {
                     buffers[combiner.targetOutput] = output.colorBuffer(combiner.targetOutput)
@@ -348,7 +348,7 @@ class SceneRenderer {
                 drawer.shadeStyle = shadeStyle
                 drawer.model = it.node.worldTransform
 
-                drawer.lineStrips(it.content.segments, it.content.weights)
+                drawer.lineStrips(it.content.segments, it.content.weights, it.content.colors)
 
             }
         }
