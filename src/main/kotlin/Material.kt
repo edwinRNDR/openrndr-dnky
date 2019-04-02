@@ -158,9 +158,9 @@ class TextureFromCode(val code: String) : TextureSource()
 private fun TextureFromCode.fs(index: Int, target: TextureTarget) = """
 |vec4 tex$index = vec4(0.0, 0.0, 0.0, 1.0);
 |{
-|vec4 texture;
+|vec4 texOut;
 |$code;
-|tex$index = texture;
+|tex$index = texOut;
 |}
 """
 
@@ -425,6 +425,7 @@ class BasicMaterial : Material {
                 is Vector3 -> shadeStyle.parameter(k, v)
                 is Vector4 -> shadeStyle.parameter(k, v)
                 is BufferTexture -> shadeStyle.parameter(k, v)
+                is ColorBuffer -> shadeStyle.parameter(k, v)
                 else -> TODO("support ${v::class.java}")
             }
         }
