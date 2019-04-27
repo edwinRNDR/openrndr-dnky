@@ -1,5 +1,5 @@
 plugins {
-    id 'org.jetbrains.kotlin.jvm' version '1.3.11'
+    id 'org.jetbrains.kotlin.jvm' version '1.3.30'
     id 'maven'
 }
 
@@ -16,13 +16,12 @@ repositories {
 
 }
 
-ext.openrndr_version = "0.4.0-SNAPSHOT"
+ext.openrndr_version = "0.3.33-rc2"
 dependencies {
     compile "org.openrndr:openrndr-core:$openrndr_version"
     compile "org.openrndr:openrndr-gl3:$openrndr_version"
     runtime "org.openrndr:openrndr-gl3-natives-windows:$openrndr_version"
     compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
-    compile 'com.github.kotlin-graphics:gli:v0.8.3.0-build-11'
 }
 
 compileKotlin {
