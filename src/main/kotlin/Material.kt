@@ -24,6 +24,7 @@ data class MaterialContext(val pass: RenderPass,
 )
 
 interface Material {
+    var doubleSided: Boolean
     fun generateShadeStyle(context: MaterialContext): ShadeStyle
     fun applyToShadeStyle(context: MaterialContext, shadeStyle: ShadeStyle, entity: Entity)
 }
@@ -170,7 +171,9 @@ class ModelCoordinates(texture: ColorBuffer,
 class Triplanar(texture: ColorBuffer,
                 var scale: Double = 1.0,
                 var offset: Vector3 = Vector3.ZERO,
-                var sharpness: Double = 2.0) : TextureFromColorBuffer(texture) {
+                var sharpness: Double = 2.0,
+                var pre: String? = null,
+                var post: String? = null) : TextureFromColorBuffer(texture) {
 
     init {
         texture.filter(MinifyingFilter.LINEAR_MIPMAP_LINEAR, MagnifyingFilter.LINEAR)
@@ -183,11 +186,16 @@ private fun ModelCoordinates.fs(index: Int) = "vec4 tex$index = texture(p_textur
 private fun Triplanar.fs(index: Int, target: TextureTarget) = """
 |vec4 tex$index = vec4(0.0, 0.0, 0.0, 1.0);
 |{
-|   vec3 n = normalize(va_normal);
+|   vec3 x_normal = va_normal;
+|   vec3 x_position = va_position;
+|   float x_scale = p_textureTriplanarScale$index;
+|   vec3 x_offset = p_textureTriplanarOffset$index;
+|   ${if (pre != null) "{ $pre } " else ""}
+|   vec3 n = normalize(x_normal);
 |   vec3 an = abs(n);
-|   vec2 uvY = va_position.xz * p_textureTriplanarScale$index + p_textureTriplanarOffset$index.x;
-|   vec2 uvX = va_position.zy * p_textureTriplanarScale$index + p_textureTriplanarOffset$index.y;
-|   vec2 uvZ = va_position.xy * p_textureTriplanarScale$index + p_textureTriplanarOffset$index.z;
+|   vec2 uvY = x_position.xz * x_scale + x_offset.x;
+|   vec2 uvX = x_position.zy * x_scale + x_offset.y;
+|   vec2 uvZ = x_position.xy * x_scale + x_offset.z;
 |   vec4 tY = texture(p_texture$index, uvY);
 |   vec4 tX = texture(p_texture$index, uvX);
 |   vec4 tZ = texture(p_texture$index, uvZ);
@@ -205,6 +213,13 @@ private fun Triplanar.fs(index: Int, target: TextureTarget) = """
     |   tex$index = vec4(normal, 0.0);
 """.trimMargin() else ""}
 |}
+    ${if (post != null) """
+        vec4 texOut = tex$index;
+        {
+            $post
+        }
+        tex$index = texOut;
+    """.trimIndent() else ""}
 """.trimMargin()
 
 sealed class TextureTarget {
@@ -221,7 +236,7 @@ sealed class TextureTarget {
 class Texture(var source: TextureSource,
               var target: TextureTarget) {
 
-    fun copy() : Texture {
+    fun copy(): Texture {
         var copied = Texture(source, target)
         return copied
     }
@@ -229,6 +244,8 @@ class Texture(var source: TextureSource,
 }
 
 class BasicMaterial : Material {
+    override var doubleSided: Boolean = false
+
     var environmentMap = false
     var color = ColorRGBa.WHITE
     var metalness = 0.5
@@ -241,7 +258,7 @@ class BasicMaterial : Material {
 
     val shadeStyles = mutableMapOf<MaterialContext, ShadeStyle>()
 
-    fun copy() : BasicMaterial {
+    fun copy(): BasicMaterial {
         var copied = BasicMaterial()
         copied.environmentMap = environmentMap
         copied.color = color

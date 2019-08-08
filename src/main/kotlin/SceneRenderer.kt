@@ -279,7 +279,7 @@ class SceneRenderer {
                 }
 
                 if (postStep.filter is Sslr) {
-                    val p = scale(drawer.width / 2.0, drawer.height / 2.0, 1.0) * translate(Vector3(1.0, 1.0, 0.0)) * drawer.projection
+                    val p = Matrix44.scale(drawer.width / 2.0, drawer.height / 2.0, 1.0) * Matrix44.translate(Vector3(1.0, 1.0, 0.0)) * drawer.projection
                     postStep.filter.projection = p //drawer.projection
                 }
 
@@ -327,6 +327,9 @@ class SceneRenderer {
                 val shadeStyle = mesh.material.generateShadeStyle(materialContext)
                 shadeStyle.parameter("viewMatrixInverse", drawer.view.inversed)
                 mesh.material.applyToShadeStyle(materialContext, shadeStyle, mesh)
+                if (mesh.material.doubleSided) {
+                    drawer.drawStyle.cullTestPass = CullTestPass.ALWAYS
+                }
                 drawer.shadeStyle = shadeStyle
                 drawer.model = it.node.worldTransform
                 drawer.vertexBufferInstances(mesh.geometry.vertexBuffers,
