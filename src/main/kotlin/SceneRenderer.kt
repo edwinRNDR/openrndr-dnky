@@ -143,7 +143,7 @@ class SceneRenderer {
 
     var drawFinalBuffer = true
 
-    fun draw(drawer: Drawer, scene: Scene, camera: Camera) {
+    fun draw(drawer: Drawer, scene: Scene) {
         drawer.pushStyle()
         drawer.depthWrite = true
         drawer.depthTestPass = DepthTestPass.LESS_OR_EQUAL
@@ -170,13 +170,12 @@ class SceneRenderer {
             lights.filter { it.content is ShadowLight && (it.content as ShadowLight).shadows is Shadows.MappedShadows }.forEach {
                 val shadowLight = it.content as ShadowLight
                 val pass: RenderPass
-                when (shadowLight.shadows) {
+                pass = when (shadowLight.shadows) {
                     is Shadows.PCF, is Shadows.Simple -> {
-                        pass = LightPass
-
+                        LightPass
                     }
                     is Shadows.VSM -> {
-                        pass = VSMLightPass
+                        VSMLightPass
                     }
                     else -> TODO()
                 }
@@ -277,12 +276,10 @@ class SceneRenderer {
                 if (postStep.filter is Ssao) {
                     postStep.filter.projection = drawer.projection
                 }
-
                 if (postStep.filter is Sslr) {
                     val p = Matrix44.scale(drawer.width / 2.0, drawer.height / 2.0, 1.0) * Matrix44.translate(Vector3(1.0, 1.0, 0.0)) * drawer.projection
-                    postStep.filter.projection = p //drawer.projection
+                    postStep.filter.projection = p
                 }
-
                 postStep.apply(buffers, postContext)
             }
         }
@@ -350,9 +347,7 @@ class SceneRenderer {
                 mesh.material.applyToShadeStyle(materialContext, shadeStyle, mesh)
                 drawer.shadeStyle = shadeStyle
                 drawer.model = it.node.worldTransform
-
                 drawer.lineStrips(it.content.segments, it.content.weights, it.content.colors)
-
             }
         }
     }

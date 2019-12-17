@@ -52,5 +52,4 @@ class SslrCombiner : Filter(Shader.createFromCode(Filter.filterVertexCode, filte
         materials = 4
         baseColors = 5
     }
-
 }

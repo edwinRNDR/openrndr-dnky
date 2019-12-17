@@ -45,15 +45,15 @@ class HexDof : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragm
         }
 
         if (vertical == null) {
-            vertical = ColorBuffer.create(target[0].width, target[0].height, target[0].contentScale, ColorFormat.RGBa, ColorType.FLOAT16)
-            diagonal = ColorBuffer.create(target[0].width, target[0].height, target[0].contentScale, ColorFormat.RGBa, ColorType.FLOAT16)
+            vertical = colorBuffer(target[0].width, target[0].height, target[0].contentScale, ColorFormat.RGBa, ColorType.FLOAT16)
+            diagonal = colorBuffer(target[0].width, target[0].height, target[0].contentScale, ColorFormat.RGBa, ColorType.FLOAT16)
         }
 
         source[0].filter(MinifyingFilter.LINEAR, MagnifyingFilter.LINEAR) // image
 
 
-        vertical!!.filter(MinifyingFilter.LINEAR, MagnifyingFilter.LINEAR)
-        diagonal!!.filter(MinifyingFilter.LINEAR, MagnifyingFilter.LINEAR)
+        vertical?.filter(MinifyingFilter.LINEAR, MagnifyingFilter.LINEAR)
+        diagonal?.filter(MinifyingFilter.LINEAR, MagnifyingFilter.LINEAR)
 
         pass1.parameters["samples"] = samples
         pass1.parameters["phase"] = phase

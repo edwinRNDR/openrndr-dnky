@@ -152,7 +152,7 @@ private fun Fog.fs(index: Int): String = """
 
 sealed class TextureSource
 object DummySource : TextureSource()
-abstract class TextureFromColorBuffer(val texture: ColorBuffer) : TextureSource()
+abstract class TextureFromColorBuffer(var texture: ColorBuffer) : TextureSource()
 
 class TextureFromCode(val code: String) : TextureSource()
 
@@ -165,13 +165,29 @@ private fun TextureFromCode.fs(index: Int, target: TextureTarget) = """
 |}
 """
 
+enum class TextureFunction(val functionName: String) {
+    TILING("texture"),
+    NOT_TILING("textureNoTile"),
+}
+
+/**
+ * @param texture the texture to sample from
+ * @param input input coordinates, default is "va_texCoord0.xy"
+ * @param textureFunction the texture function to use, default is TextureFunction.TILING
+ * @param pre the pre-fetch shader code to inject, can only adjust "x_texCoord"
+ * @param post the post-fetch shader code to inject, can only adjust "x_texture"
+ */
 class ModelCoordinates(texture: ColorBuffer,
-                       val input: String = "va_texCoord0.xy") : TextureFromColorBuffer(texture)
+                       var input: String = "va_texCoord0.xy",
+                       var textureFunction: TextureFunction = TextureFunction.TILING,
+                       var pre: String? = null,
+                       var post: String? = null) : TextureFromColorBuffer(texture)
 
 class Triplanar(texture: ColorBuffer,
                 var scale: Double = 1.0,
                 var offset: Vector3 = Vector3.ZERO,
                 var sharpness: Double = 2.0,
+                var textureFunction: TextureFunction = TextureFunction.TILING,
                 var pre: String? = null,
                 var post: String? = null) : TextureFromColorBuffer(texture) {
 
@@ -182,7 +198,17 @@ class Triplanar(texture: ColorBuffer,
     }
 }
 
-private fun ModelCoordinates.fs(index: Int) = "vec4 tex$index = texture(p_texture$index, $input);"
+private fun ModelCoordinates.fs(index: Int) = """
+|vec4 tex$index = vec4(0.0, 0.0, 0.0, 1.0); 
+|{
+|   vec2 x_texCoord = $input;
+|   ${if (pre != null) "{ $pre } " else ""}
+|   ${textureFunction.functionName}(p_texture$index, x_texCoord);
+|   ${if (post != null) "{ $post } " else ""}
+|   tex$index = x_texture;
+|}
+"""
+
 private fun Triplanar.fs(index: Int, target: TextureTarget) = """
 |vec4 tex$index = vec4(0.0, 0.0, 0.0, 1.0);
 |{
@@ -196,9 +222,9 @@ private fun Triplanar.fs(index: Int, target: TextureTarget) = """
 |   vec2 uvY = x_position.xz * x_scale + x_offset.x;
 |   vec2 uvX = x_position.zy * x_scale + x_offset.y;
 |   vec2 uvZ = x_position.xy * x_scale + x_offset.z;
-|   vec4 tY = texture(p_texture$index, uvY);
-|   vec4 tX = texture(p_texture$index, uvX);
-|   vec4 tZ = texture(p_texture$index, uvZ);
+|   vec4 tY = ${textureFunction.functionName}(p_texture$index, uvY);
+|   vec4 tX = ${textureFunction.functionName}(p_texture$index, uvX);
+|   vec4 tZ = ${textureFunction.functionName}(p_texture$index, uvZ);
 |   vec3 weights = pow(an, vec3(p_textureTriplanarSharpness$index));
 |   weights = weights / (weights.x + weights.y + weights.z);
 |   tex$index = tX * weights.x + tY * weights.y + weights.z * tZ;
@@ -214,11 +240,11 @@ private fun Triplanar.fs(index: Int, target: TextureTarget) = """
 """.trimMargin() else ""}
 |}
     ${if (post != null) """
-        vec4 texOut = tex$index;
+        vec4 x_texture = tex$index;
         {
             $post
         }
-        tex$index = texOut;
+        tex$index = x_texture;
     """.trimIndent() else ""}
 """.trimMargin()
 
@@ -235,12 +261,10 @@ sealed class TextureTarget {
 
 class Texture(var source: TextureSource,
               var target: TextureTarget) {
-
     fun copy(): Texture {
-        var copied = Texture(source, target)
+        val copied = Texture(source, target)
         return copied
     }
-
 }
 
 class BasicMaterial : Material {
@@ -259,7 +283,7 @@ class BasicMaterial : Material {
     val shadeStyles = mutableMapOf<MaterialContext, ShadeStyle>()
 
     fun copy(): BasicMaterial {
-        var copied = BasicMaterial()
+        val copied = BasicMaterial()
         copied.environmentMap = environmentMap
         copied.color = color
         copied.metalness = metalness
@@ -272,14 +296,9 @@ class BasicMaterial : Material {
     }
 
     override fun generateShadeStyle(context: MaterialContext): ShadeStyle {
-
-
         val cached = shadeStyles.getOrPut(context) {
-            println("creating shadestyle for $this + ${context.hashCode()}")
             val needLight = needLight(context)
-
             val needLTC = context.lights.any { it.content is AreaLight }
-
             val preambleFS = """
             vec3 m_color = p_color.rgb;
             float m_f0 = 0.5;
@@ -316,7 +335,6 @@ class BasicMaterial : Material {
                 }).joinToString("\n")
             } else ""
 
-
             val displacers = textures.filter { it.target is TextureTarget.Height }
 
             val textureVS = if (displacers.isNotEmpty()) textures.mapIndexed { index, it ->
@@ -345,14 +363,7 @@ class BasicMaterial : Material {
         float NoV = abs(dot(N, V)) + 1e-5;
 
         ${if (environmentMap && context.meshCubemaps.isNotEmpty()) """
-            /*
-            float fresnelBias = 0.1;
-            float fresnelScale = 0.5;
-            float fresnelPower = 0.3;
-            float reflectivity = fresnelBias + fresnelScale * pow(1.0 + dot(-V, f_worldNormal), fresnelPower);
-            */
-
-            {
+           {
                 vec2 dfg = PrefilteredDFG_Karis(m_roughness, NoV);
                 vec3 sc = m_metalness * m_color.rgb + (1.0-m_metalness) * vec3(0.04);
 
@@ -376,10 +387,7 @@ class BasicMaterial : Material {
                 fog.fs(index)
             }.joinToString("\n")}
 
-
-
     """.trimIndent() else ""
-
             val rt = RenderTarget.active
 
             val combinerFS = context.pass.combiners.map {
@@ -390,6 +398,9 @@ class BasicMaterial : Material {
             val vs = (this@BasicMaterial.vertexTransform ?: "") + textureVS
 
             shadeStyle {
+                vertexPreamble = """
+|                    $shaderNoRepetitionVert
+                """.trimIndent()
                 fragmentPreamble = """
             |${if (needLTC) ltcShaders else ""}
             |$shaderLinePlaneIntersect
@@ -397,6 +408,7 @@ class BasicMaterial : Material {
             |$shaderSideOfPlane
             |$shaderGGX
             |$shaderVSM
+            |$shaderNoRepetition
             """.trimMargin()
                 this.suppressDefaultOutput = true
                 this.vertexTransform = vs
@@ -420,7 +432,6 @@ class BasicMaterial : Material {
     }
 
     override fun applyToShadeStyle(context: MaterialContext, shadeStyle: ShadeStyle, entity: Entity) {
-
         if (entity is Mesh) {
             if (environmentMap) {
                 context.meshCubemaps[entity]?.let {
@@ -428,13 +439,12 @@ class BasicMaterial : Material {
                 }
             }
         }
-
         shadeStyle.parameter("emission", emission)
         shadeStyle.parameter("color", color)
         shadeStyle.parameter("metalness", metalness)
         shadeStyle.parameter("roughness", roughness)
 
-        parameters.forEach { k, v ->
+        parameters.forEach { (k, v) ->
             when (v) {
                 is Double -> shadeStyle.parameter(k, v)
                 is Int -> shadeStyle.parameter(k, v)

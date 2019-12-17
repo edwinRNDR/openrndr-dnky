@@ -4,17 +4,17 @@ plugins {
 }
 
 group 'org.openrndr.dnky'
-version '0.0.5-SNAPSHOT'
+version '0.0.7-SNAPSHOT'
 
 repositories {
     mavenLocal()
     mavenCentral()
     maven {
-        url="https://dl.bintray.com/openrndr/openrndr"
+        url = "https://dl.bintray.com/openrndr/openrndr"
     }
 }
 
-ext.openrndr_version = "0.3.35"
+ext.openrndr_version = "0.3.37"
 dependencies {
     compile "org.openrndr:openrndr-core:$openrndr_version"
     compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8"

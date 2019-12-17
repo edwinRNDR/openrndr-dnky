@@ -1,6 +1,5 @@
 package org.openrndr.dnky.post
 
-import org.openrndr.dnky.LightContext
 import org.openrndr.dnky.PostContext
 import org.openrndr.draw.*
 
@@ -34,6 +33,7 @@ class PostStepBuilder<T : Filter>(val filter: T) {
     var update: (T.(PostContext) -> Unit)? = null
 
     internal fun build(): PostStep {
+        @Suppress("UNCHECKED_CAST", "PackageDirectoryMismatch")
         return PostStep(outputScale, filter, inputs, output, outputFormat, outputType, update as (Filter.(PostContext) -> Unit)?)
     }
 }

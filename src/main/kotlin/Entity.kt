@@ -5,7 +5,6 @@ import org.openrndr.draw.*
 import org.openrndr.math.Matrix44
 import org.openrndr.math.Vector3
 import org.openrndr.math.Vector4
-import org.openrndr.math.transforms.ortho
 import org.openrndr.math.transforms.perspective
 import org.openrndr.math.transforms.transform
 

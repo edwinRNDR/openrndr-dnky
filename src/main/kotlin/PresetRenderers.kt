@@ -11,16 +11,14 @@ class PhotographicRenderer(val renderer: SceneRenderer) {
     var focalPlane = 100.0
     var aperture = 1.0
 
-//    var fogStart = 50.0
-//    var fogEnd = 150.0
     var fogDensity = 0.01
     var fogPower = 1.0
     var fogColor = ColorRGBa.GRAY
 
-    var abberationConstant = 0.0
-    var abberationLinear = 0.0
-    var abberationBlendConstant = 0.0
-    var abberationBlendLinear = 0.0
+    var aberrationConstant = 0.0
+    var aberrationLinear = 0.0
+    var aberrationBlendConstant = 0.0
+    var aberrationBlendLinear = 0.0
 }
 
 /**
@@ -91,16 +89,16 @@ fun photographicRenderer(volumetricPost:Boolean = false): PhotographicRenderer {
                 exposure = 1.0
                 focalPlane = pr.focalPlane
                 aperture = pr.aperture
-                aberrationLinear = pr.abberationLinear
-                aberrationBlendLinear = pr.abberationBlendLinear
-                aberrationConstant = pr.abberationConstant
-                aberrationBlendConstant = pr.abberationBlendConstant
+                aberrationLinear = pr.aberrationLinear
+                aberrationBlendLinear = pr.aberrationBlendLinear
+                aberrationConstant = pr.aberrationConstant
+                aberrationBlendConstant = pr.aberrationBlendConstant
             }
         }
 
         postSteps += PostStep(1.0, HexDof(), listOf("cocImage"), "dof", ColorFormat.RGBa, ColorType.FLOAT16)
 
-        postSteps += postStep(TonemapAces()) {
+        postSteps += postStep(TonemapUncharted2()) {
             inputs += "dof"
             output = "ldr"
             outputFormat = ColorFormat.RGBa

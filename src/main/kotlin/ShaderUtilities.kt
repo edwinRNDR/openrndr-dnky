@@ -1,5 +1,74 @@
 package org.openrndr.dnky
 
+val shaderNoRepetition = """
+float sum( vec3 v ) { return v.x+v.y+v.z; }
+    
+// based on https://www.shadertoy.com/view/Xtl3zf 
+vec4 textureNoTile(in sampler2D tex, in vec2 x)
+{
+    float v = 1.0;
+    float k = texture(tex, 0.005*x ).x; // cheap (cache friendly) lookup
+    
+    vec2 duvdx = dFdx( x );
+    vec2 duvdy = dFdx( x );
+    
+    float l = k*8.0;
+    float f = fract(l);
+    
+#if 0
+    float ia = floor(l); // my method
+    float ib = ia + 1.0;
+#else
+    float ia = floor(l+0.5); // suslik's method (see comments)
+    float ib = floor(l);
+    f = min(f, 1.0-f)*2.0;
+#endif    
+    
+    vec2 offa = sin(vec2(3.0,7.0)*ia); // can replace with any other hash
+    vec2 offb = sin(vec2(3.0,7.0)*ib); // can replace with any other hash
+
+    vec3 cola = textureGrad( tex, x + v*offa, duvdx, duvdy ).xyz;
+    vec3 colb = textureGrad( tex, x + v*offb, duvdx, duvdy ).xyz;
+    
+    return vec4(mix( cola, colb, smoothstep(0.2,0.8,f-0.1*sum(cola-colb)) ), 1.0);
+}
+"""
+
+val shaderNoRepetitionVert = """
+float sum( vec3 v ) { return v.x+v.y+v.z; }
+    
+// based on https://www.shadertoy.com/view/Xtl3zf 
+vec4 textureNoTile(in sampler2D tex, in vec2 x)
+{
+    float v = 1.0;
+    float k = texture(tex, 0.005*x ).x; // cheap (cache friendly) lookup
+    
+    
+    float l = k*8.0;
+    float f = fract(l);
+    
+#if 0
+    float ia = floor(l); // my method
+    float ib = ia + 1.0;
+#else
+    float ia = floor(l+0.5); // suslik's method (see comments)
+    float ib = floor(l);
+    f = min(f, 1.0-f)*2.0;
+#endif    
+    
+    vec2 offa = sin(vec2(3.0,7.0)*ia); // can replace with any other hash
+    vec2 offb = sin(vec2(3.0,7.0)*ib); // can replace with any other hash
+
+    vec3 cola = texture( tex, x + v*offa).xyz;
+    vec3 colb = texture( tex, x + v*offb).xyz;
+    
+    return vec4(mix( cola, colb, smoothstep(0.2,0.8,f-0.1*sum(cola-colb)) ), 1.0);
+}
+"""
+
+
+
+
 val shaderProjectOnPlane = """
 vec3 projectOnPlane(vec3 p, vec3 pc, vec3 pn) {
     float distance = dot(pn, p-pc);
@@ -119,9 +188,6 @@ vec2 PrefilteredDFG_Karis(float roughness, float NoV) {
     float a004 = min(r.x * r.x, exp2(-9.28 * NoV)) * r.x + r.y;
     return vec2(-1.04, 1.04) * a004 + r.zw;
 }
-
-
-
 
 float saturate(float x) {
     return clamp(x, 0.0, 1.0);

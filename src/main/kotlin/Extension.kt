@@ -10,10 +10,9 @@ class DNKY : Extension {
     var scene = Scene()
     var sceneRenderer = SceneRenderer()
 
-    var camera = PerspectiveCamera(90.0, 100.0, 100.0, 0.1, 1000.0)
     override fun beforeDraw(drawer: Drawer, program: Program) {
         drawer.depthTestPass = DepthTestPass.LESS_OR_EQUAL
         drawer.depthWrite = true
-        sceneRenderer.draw(drawer, scene, camera)
+        sceneRenderer.draw(drawer, scene)
     }
 }

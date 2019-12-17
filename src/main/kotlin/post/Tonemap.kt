@@ -10,7 +10,7 @@ class TonemapUncharted2 : Filter(Shader.createFromCode(
     var exposureBias: Double by parameters
 
     init {
-        exposureBias = 1.0
+        exposureBias = 2.0
     }
 }
 
