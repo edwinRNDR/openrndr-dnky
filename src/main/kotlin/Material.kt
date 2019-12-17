@@ -9,6 +9,7 @@ import org.openrndr.math.Vector2
 import org.openrndr.math.Vector3
 import org.openrndr.math.Vector4
 import org.openrndr.math.transforms.normalMatrix
+import java.nio.ByteBuffer
 
 data class LightContext(val lights: List<NodeContent<Light>>,
                         val shadowMaps: Map<ShadowLight, RenderTarget>)
@@ -27,6 +28,26 @@ interface Material {
     var doubleSided: Boolean
     fun generateShadeStyle(context: MaterialContext): ShadeStyle
     fun applyToShadeStyle(context: MaterialContext, shadeStyle: ShadeStyle, entity: Entity)
+}
+
+
+private val noise128 by lazy {
+    val cb = colorBuffer(128, 128)
+    val items = cb.width * cb.height * cb.format.componentCount
+    val buffer = ByteBuffer.allocateDirect(items)
+    for (y in 0 until cb.height) {
+        for (x in 0 until cb.width) {
+            for (i in 0 until 4)
+            buffer.put((Math.random()*255).toByte())
+        }
+    }
+    buffer.rewind()
+    cb.write(buffer)
+    cb.generateMipmaps()
+    cb.filter(MinifyingFilter.LINEAR_MIPMAP_LINEAR, MagnifyingFilter.LINEAR)
+    cb.wrapU = WrapMode.REPEAT
+    cb.wrapV = WrapMode.REPEAT
+    cb
 }
 
 private fun PointLight.fs(index: Int): String = """
@@ -152,7 +173,7 @@ private fun Fog.fs(index: Int): String = """
 
 sealed class TextureSource
 object DummySource : TextureSource()
-abstract class TextureFromColorBuffer(var texture: ColorBuffer) : TextureSource()
+abstract class TextureFromColorBuffer(var texture: ColorBuffer, var textureFunction: TextureFunction) : TextureSource()
 
 class TextureFromCode(val code: String) : TextureSource()
 
@@ -166,8 +187,8 @@ private fun TextureFromCode.fs(index: Int, target: TextureTarget) = """
 """
 
 enum class TextureFunction(val functionName: String) {
-    TILING("texture"),
-    NOT_TILING("textureNoTile"),
+    TILING("texture("),
+    NOT_TILING("textureNoTile(p_textureNoise,"),
 }
 
 /**
@@ -179,17 +200,17 @@ enum class TextureFunction(val functionName: String) {
  */
 class ModelCoordinates(texture: ColorBuffer,
                        var input: String = "va_texCoord0.xy",
-                       var textureFunction: TextureFunction = TextureFunction.TILING,
+                       textureFunction: TextureFunction = TextureFunction.TILING,
                        var pre: String? = null,
-                       var post: String? = null) : TextureFromColorBuffer(texture)
+                       var post: String? = null) : TextureFromColorBuffer(texture, textureFunction)
 
 class Triplanar(texture: ColorBuffer,
                 var scale: Double = 1.0,
                 var offset: Vector3 = Vector3.ZERO,
                 var sharpness: Double = 2.0,
-                var textureFunction: TextureFunction = TextureFunction.TILING,
+                textureFunction: TextureFunction = TextureFunction.TILING,
                 var pre: String? = null,
-                var post: String? = null) : TextureFromColorBuffer(texture) {
+                var post: String? = null) : TextureFromColorBuffer(texture, textureFunction) {
 
     init {
         texture.filter(MinifyingFilter.LINEAR_MIPMAP_LINEAR, MagnifyingFilter.LINEAR)
@@ -203,7 +224,7 @@ private fun ModelCoordinates.fs(index: Int) = """
 |{
 |   vec2 x_texCoord = $input;
 |   ${if (pre != null) "{ $pre } " else ""}
-|   ${textureFunction.functionName}(p_texture$index, x_texCoord);
+|   ${textureFunction.functionName}p_texture$index, x_texCoord);
 |   ${if (post != null) "{ $post } " else ""}
 |   tex$index = x_texture;
 |}
@@ -222,9 +243,9 @@ private fun Triplanar.fs(index: Int, target: TextureTarget) = """
 |   vec2 uvY = x_position.xz * x_scale + x_offset.x;
 |   vec2 uvX = x_position.zy * x_scale + x_offset.y;
 |   vec2 uvZ = x_position.xy * x_scale + x_offset.z;
-|   vec4 tY = ${textureFunction.functionName}(p_texture$index, uvY);
-|   vec4 tX = ${textureFunction.functionName}(p_texture$index, uvX);
-|   vec4 tZ = ${textureFunction.functionName}(p_texture$index, uvZ);
+|   vec4 tY = ${textureFunction.functionName}p_texture$index, uvY);
+|   vec4 tX = ${textureFunction.functionName}p_texture$index, uvX);
+|   vec4 tZ = ${textureFunction.functionName}p_texture$index, uvZ);
 |   vec3 weights = pow(an, vec3(p_textureTriplanarSharpness$index));
 |   weights = weights / (weights.x + weights.y + weights.z);
 |   tex$index = tX * weights.x + tY * weights.y + weights.z * tZ;
@@ -459,7 +480,12 @@ class BasicMaterial : Material {
         if (needLight(context)) {
             textures.forEachIndexed { index, texture ->
                 when (val source = texture.source) {
-                    is TextureFromColorBuffer -> shadeStyle.parameter("texture$index", source.texture)
+                    is TextureFromColorBuffer -> {
+                        shadeStyle.parameter("texture$index", source.texture)
+                        if (source.textureFunction == TextureFunction.NOT_TILING) {
+                            shadeStyle.parameter("textureNoise", noise128)
+                        }
+                    }
                 }
                 when (val source = texture.source) {
                     is Triplanar -> {
@@ -472,6 +498,7 @@ class BasicMaterial : Material {
                     val target = texture.target as TextureTarget.Height
                     shadeStyle.parameter("textureHeightScale$index", target.scale)
                 }
+
             }
 
             val lights = context.lights
@@ -562,9 +589,7 @@ class BasicMaterial : Material {
             }
         } else {
             textures.forEachIndexed { index, texture ->
-
                 if (texture.target is TextureTarget.Height) {
-
                     when (val source = texture.source) {
                         is TextureFromColorBuffer -> shadeStyle.parameter("texture$index", source.texture)
                     }
@@ -583,11 +608,17 @@ class BasicMaterial : Material {
     }
 }
 
-private inline fun <reified T : Material> MeshBase.material(init: T.() -> Unit): T {
+private inline fun <reified T : Material> MeshBase.materialInit(init: T.() -> Unit): T {
     val t: T = T::class.java.constructors[0].newInstance() as T
     t.init()
     material = t
     return t
+}
+
+fun material(init: BasicMaterial.() -> Unit): BasicMaterial {
+    val m = BasicMaterial()
+    m.init()
+    return m
 }
 
 fun BasicMaterial.texture(init: Texture.() -> Unit): Texture {
@@ -597,10 +628,25 @@ fun BasicMaterial.texture(init: Texture.() -> Unit): Texture {
     return texture
 }
 
-fun MeshBase.basicMaterial(init: BasicMaterial.() -> Unit): BasicMaterial = material(init)
+@Deprecated("deprecated")
+fun MeshBase.basicMaterial(init: BasicMaterial.() -> Unit): BasicMaterial = materialInit(init)
+
+@Deprecated("deprecated")
 fun LineMesh.basicMaterial(init: BasicMaterial.() -> Unit): BasicMaterial {
     val t = BasicMaterial()
     t.init()
     material = t
     return t
 }
+
+fun MeshBase.material(init: BasicMaterial.() -> Unit): BasicMaterial = materialInit(init)
+
+fun LineMesh.material(init: BasicMaterial.() -> Unit): BasicMaterial {
+    val t = BasicMaterial()
+    t.init()
+    material = t
+    return t
+}
+
+
+

@@ -19,14 +19,27 @@ class Geometry(val vertexBuffers: List<VertexBuffer>,
 val DummyGeometry = Geometry(emptyList(), null, DrawPrimitive.TRIANGLES, 0, 0)
 
 class GeometryBuilder {
-    var vertexBuffers = mutableListOf<VertexBuffer>()
+    var vertexBuffer: VertexBuffer? = null
+    var vertexBuffers: MutableList<VertexBuffer>? = null//  mutableListOf<VertexBuffer>()
     var indexBuffer: IndexBuffer? = null
     var primitive: DrawPrimitive = DrawPrimitive.TRIANGLES
     var offset = 0
-    var vertexCount = 0
+    var vertexCount: Int? = null
 
-    operator fun invoke(): Geometry {
-        return Geometry(vertexBuffers, indexBuffer, primitive, offset, vertexCount)
+    internal fun build(): Geometry {
+        val effectiveVertexBuffers = mutableListOf<VertexBuffer>()
+
+        vertexBuffer?.let {
+            effectiveVertexBuffers.add(it)
+        }
+        vertexBuffers?.let {
+            effectiveVertexBuffers.addAll(it)
+        }
+        require(effectiveVertexBuffers.isNotEmpty()) { "need at least one vertex buffer" }
+
+        val effectiveVertexCount = vertexCount ?: effectiveVertexBuffers[0].vertexCount
+
+        return Geometry(effectiveVertexBuffers, indexBuffer, primitive, offset, effectiveVertexCount)
     }
 }
 
@@ -36,10 +49,17 @@ fun geometry(vertexBuffer: VertexBuffer,
     return Geometry(listOf(vertexBuffer), null, primitive, offset, vertexCount)
 }
 
+
 fun geometry(init: GeometryBuilder.() -> Unit): Geometry {
     val builder = GeometryBuilder()
     builder.init()
-    return builder()
+    return builder.build()
+}
+
+fun MeshBase.geometry(init: GeometryBuilder.() -> Unit) {
+    val builder = GeometryBuilder()
+    builder.init()
+    geometry = builder.build()
 }
 
 abstract class MeshBase(var geometry: Geometry, var material: Material) : Entity()
@@ -49,7 +69,7 @@ class InstancedMesh(geometry: Geometry,
                     var instances: Int,
                     var attributes: List<VertexBuffer>) : MeshBase(geometry, material)
 
-class LineMesh(var segments: List<List<Vector3>>, var weights:List<Double>, var colors:List<ColorRGBa>, var material: Material) : Entity()
+class LineMesh(var segments: List<List<Vector3>>, var weights: List<Double>, var colors: List<ColorRGBa>, var material: Material) : Entity()
 
 /** Light entity */
 abstract class Light : Entity() {
