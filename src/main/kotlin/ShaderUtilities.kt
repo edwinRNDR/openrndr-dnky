@@ -4,10 +4,10 @@ val shaderNoRepetition = """
 float sum( vec3 v ) { return v.x+v.y+v.z; }
     
 // based on https://www.shadertoy.com/view/Xtl3zf 
-vec4 textureNoTile(in sampler2D noiseTex, in sampler2D tex, in vec2 x)
+vec4 textureNoTile(in sampler2D noiseTex, in sampler2D tex, in vec2 noiseOffset,  in vec2 x)
 {
     float v = 1.0;
-    float k = texture(noiseTex, x*0.01 ).x; // cheap (cache friendly) lookup
+    float k = texture(noiseTex, noiseOffset + x*0.01 ).x; // cheap (cache friendly) lookup
     
     vec2 duvdx = dFdx( x );
     vec2 duvdy = dFdx( x );
@@ -38,10 +38,10 @@ val shaderNoRepetitionVert = """
 float sum( vec3 v ) { return v.x+v.y+v.z; }
     
 // based on https://www.shadertoy.com/view/Xtl3zf 
-vec4 textureNoTile(in sampler2D tex, in vec2 x)
+vec4 textureNoTile(in sampler2D tex, in vec2 noiseOffset, in vec2 x)
 {
     float v = 1.0;
-    float k = texture(tex, 0.005*x ).x; // cheap (cache friendly) lookup
+    float k = texture(tex, noiseOffset + 0.005*x ).x; // cheap (cache friendly) lookup
     
     float l = k*8.0;
     float f = fract(l);

@@ -15,8 +15,10 @@ repositories {
 }
 
 ext.openrndr_version = "0.3.37"
+ext.orx_version = "0.3.44"
 dependencies {
     compile "org.openrndr:openrndr-core:$openrndr_version"
+    compile "org.openrndr.extra:orx-fx:$orx_version"
     compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
 }
 

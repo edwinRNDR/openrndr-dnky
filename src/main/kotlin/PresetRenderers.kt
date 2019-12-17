@@ -1,5 +1,6 @@
 package org.openrndr.dnky
 
+import FilmGrain
 import org.openrndr.color.ColorRGBa
 import org.openrndr.dnky.post.*
 import org.openrndr.draw.ColorFormat
@@ -97,6 +98,17 @@ fun photographicRenderer(volumetricPost:Boolean = false): PhotographicRenderer {
         }
 
         postSteps += PostStep(1.0, HexDof(), listOf("cocImage"), "dof", ColorFormat.RGBa, ColorType.FLOAT16)
+
+        postSteps += postStep(FilmGrain()) {
+            inputs += "dof"
+            output = "dof"
+            outputFormat = ColorFormat.RGBa
+            outputType = ColorType.FLOAT16
+            update = {
+                time = Math.random()*10000
+                this.grainStrength = 0.2
+            }
+        }
 
         postSteps += postStep(TonemapUncharted2()) {
             inputs += "dof"

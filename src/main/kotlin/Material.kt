@@ -38,7 +38,7 @@ private val noise128 by lazy {
     for (y in 0 until cb.height) {
         for (x in 0 until cb.width) {
             for (i in 0 until 4)
-            buffer.put((Math.random()*255).toByte())
+                buffer.put((Math.random() * 255).toByte())
         }
     }
     buffer.rewind()
@@ -64,11 +64,12 @@ private fun PointLight.fs(index: Int): String = """
 }
 """.trimMargin()
 
-private fun AmbientLight.fs(index: Int): String = "light += p_lightColor$index.rgb;"
+private fun AmbientLight.fs(index: Int): String = "f_diffuse += p_lightColor$index.rgb;"
 
 private fun DirectionalLight.fs(index: Int) = """
 |{
 |    vec3 L = normalize(p_lightDirection$index);
+|    float attenuation = 1.0;
 |    vec3 H = normalize(V + L);
 |    float NoL = clamp(dot(N, L), 0.0, 1.0);
 |    float LoH = clamp(dot(L, H), 0.0, 1.0);
@@ -186,9 +187,9 @@ private fun TextureFromCode.fs(index: Int, target: TextureTarget) = """
 |}
 """
 
-enum class TextureFunction(val functionName: String) {
-    TILING("texture("),
-    NOT_TILING("textureNoTile(p_textureNoise,"),
+enum class TextureFunction(val function: (String, String) -> String) {
+    TILING({ texture, uv -> "texture($uv)" }),
+    NOT_TILING({ texture, uv -> "textureNoTile(p_textureNoise, $texture, x_noTileOffset, $uv)" })
 }
 
 /**
@@ -223,8 +224,9 @@ private fun ModelCoordinates.fs(index: Int) = """
 |vec4 tex$index = vec4(0.0, 0.0, 0.0, 1.0); 
 |{
 |   vec2 x_texCoord = $input;
+|   vec2 x_noTileOffset = vec2(0.0);
 |   ${if (pre != null) "{ $pre } " else ""}
-|   ${textureFunction.functionName}p_texture$index, x_texCoord);
+|   x_texture = ${textureFunction.function("p_texture$index", "x_texCoord")};
 |   ${if (post != null) "{ $post } " else ""}
 |   tex$index = x_texture;
 |}
@@ -237,15 +239,16 @@ private fun Triplanar.fs(index: Int, target: TextureTarget) = """
 |   vec3 x_position = va_position;
 |   float x_scale = p_textureTriplanarScale$index;
 |   vec3 x_offset = p_textureTriplanarOffset$index;
+|   vec2 x_noTileOffset = vec2(0.0);
 |   ${if (pre != null) "{ $pre } " else ""}
 |   vec3 n = normalize(x_normal);
 |   vec3 an = abs(n);
 |   vec2 uvY = x_position.xz * x_scale + x_offset.x;
 |   vec2 uvX = x_position.zy * x_scale + x_offset.y;
 |   vec2 uvZ = x_position.xy * x_scale + x_offset.z;
-|   vec4 tY = ${textureFunction.functionName}p_texture$index, uvY);
-|   vec4 tX = ${textureFunction.functionName}p_texture$index, uvX);
-|   vec4 tZ = ${textureFunction.functionName}p_texture$index, uvZ);
+|   vec4 tY = ${textureFunction.function("p_texture$index", "uvY")};
+|   vec4 tX = ${textureFunction.function("p_texture$index", "uvX")};
+|   vec4 tZ = ${textureFunction.function("p_texture$index", "uvZ")};
 |   vec3 weights = pow(an, vec3(p_textureTriplanarSharpness$index));
 |   weights = weights / (weights.x + weights.y + weights.z);
 |   tex$index = tX * weights.x + tY * weights.y + weights.z * tZ;
