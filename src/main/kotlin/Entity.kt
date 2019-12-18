@@ -5,6 +5,7 @@ import org.openrndr.draw.*
 import org.openrndr.math.Matrix44
 import org.openrndr.math.Vector3
 import org.openrndr.math.Vector4
+import org.openrndr.math.transforms.ortho
 import org.openrndr.math.transforms.perspective
 import org.openrndr.math.transforms.transform
 
@@ -118,12 +119,10 @@ interface AttenuatedLight {
 }
 
 class DirectionalLight(var direction: Vector3 = Vector3.UNIT_Z, override var shadows: Shadows = Shadows.None) : Light(), ShadowLight {
-    override fun projection(renderTarget: RenderTarget): Matrix44 {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-    }
+    var projectionSize = 10.0
 
-    override fun view(node: SceneNode): Matrix44 {
-        TODO("not implemented")
+    override fun projection(renderTarget: RenderTarget): Matrix44 {
+        return ortho(-projectionSize/2.0, projectionSize/2.0, -projectionSize/2.0, projectionSize/2.0,  1.0, 150.0)
     }
 }
 

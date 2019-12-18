@@ -10,6 +10,7 @@ import org.openrndr.math.Vector3
 import org.openrndr.math.Vector4
 import org.openrndr.math.transforms.normalMatrix
 import java.nio.ByteBuffer
+import kotlin.math.cos
 
 data class LightContext(val lights: List<NodeContent<Light>>,
                         val shadowMaps: Map<ShadowLight, RenderTarget>)
@@ -68,12 +69,16 @@ private fun AmbientLight.fs(index: Int): String = "f_diffuse += p_lightColor$ind
 
 private fun DirectionalLight.fs(index: Int) = """
 |{
-|    vec3 L = normalize(p_lightDirection$index);
+|    vec3 L = normalize(-p_lightDirection$index);
 |    float attenuation = 1.0;
 |    vec3 H = normalize(V + L);
 |    float NoL = clamp(dot(N, L), 0.0, 1.0);
 |    float LoH = clamp(dot(L, H), 0.0, 1.0);
 |    float NoH = clamp(dot(N, H), 0.0, 1.0);
+|    vec3 Lr = p_lightPosition$index - v_worldPosition;
+//|    vec3 L = normalize(Lr);
+|    ${shadows.fs(index)}
+|    
 |    f_diffuse += NoL * attenuation * Fd_Burley(m_roughness * m_roughness, NoV, NoL, LoH) * p_lightColor$index.rgb * m_color.rgb ;
 |    float Dg = D_GGX(m_roughness * m_roughness, NoH, H);
 |    float Vs = V_SmithGGXCorrelated(m_roughness * m_roughness, NoV, NoL);
@@ -188,7 +193,7 @@ private fun TextureFromCode.fs(index: Int, target: TextureTarget) = """
 """
 
 enum class TextureFunction(val function: (String, String) -> String) {
-    TILING({ texture, uv -> "texture($uv)" }),
+    TILING({ texture, uv -> "texture($texture, $uv)" }),
     NOT_TILING({ texture, uv -> "textureNoTile(p_textureNoise, $texture, x_noTileOffset, $uv)" })
 }
 
@@ -524,8 +529,8 @@ class BasicMaterial : Material {
                         shadeStyle.parameter("lightConstantAttenuation$index", light.constantAttenuation)
                         shadeStyle.parameter("lightLinearAttenuation$index", light.linearAttenuation)
                         shadeStyle.parameter("lightQuadraticAttenuation$index", light.quadraticAttenuation)
-                        shadeStyle.parameter("lightInnerCos$index", Math.cos(Math.toRadians(light.innerAngle)))
-                        shadeStyle.parameter("lightOuterCos$index", Math.cos(Math.toRadians(light.outerAngle)))
+                        shadeStyle.parameter("lightInnerCos$index", cos(Math.toRadians(light.innerAngle)))
+                        shadeStyle.parameter("lightOuterCos$index", cos(Math.toRadians(light.outerAngle)))
 
                         if (light.shadows is Shadows.MappedShadows) {
                             context.shadowMaps[light]?.let {
@@ -544,7 +549,23 @@ class BasicMaterial : Material {
                         }
                     }
                     is DirectionalLight -> {
+                        shadeStyle.parameter("lightPosition$index", (node.worldTransform * Vector4.UNIT_W).xyz)
                         shadeStyle.parameter("lightDirection$index", ((normalMatrix(node.worldTransform)) * light.direction).normalized)
+                        if (light.shadows is Shadows.MappedShadows) {
+                            context.shadowMaps[light]?.let {
+                                val look = light.view(node)
+                                shadeStyle.parameter("lightTransform$index",
+                                        light.projection(it) * look)
+
+                                if (light.shadows is Shadows.DepthMappedShadows) {
+                                    shadeStyle.parameter("lightShadowMap$index", it.depthBuffer ?: TODO())
+                                }
+
+                                if (light.shadows is Shadows.ColorMappedShadows) {
+                                    shadeStyle.parameter("lightShadowMap$index", it.colorBuffer(0))
+                                }
+                            }
+                        }
                     }
 
                     is HemisphereLight -> {
@@ -568,6 +589,7 @@ class BasicMaterial : Material {
                         light.distanceField?.let {
                             shadeStyle.parameter("lightDistanceField$index", it)
                         }
+
                         if (light.shadows is Shadows.MappedShadows) {
                             context.shadowMaps[light]?.let {
                                 val look = light.view(node)
