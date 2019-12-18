@@ -3,7 +3,7 @@ package org.openrndr.dnky.post
 import org.openrndr.draw.Filter
 import org.openrndr.draw.Shader
 
-class PostCombiner : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmentCode("post-combiner.frag"))) {
+class PostCombiner : Filter(Shader.createFromCode(filterVertexCode, filterFragmentCode("post-combiner.frag"))) {
     var diffuseSpecular: Int by parameters
     var emissive: Int by parameters
     var occlusion: Int by parameters

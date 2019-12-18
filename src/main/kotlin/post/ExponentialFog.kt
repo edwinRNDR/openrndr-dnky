@@ -4,9 +4,16 @@ import org.openrndr.color.ColorRGBa
 import org.openrndr.draw.Filter
 import org.openrndr.draw.Shader
 
-class ExponentialFog : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmentCode("exponential-fog.frag"))) {
+/**
+ * Exponential fog filter
+ */
+class ExponentialFog : Filter(Shader.createFromCode(filterVertexCode, filterFragmentCode("exponential-fog.frag"))) {
     var density: Double by parameters
     var power: Double by parameters
+
+    /**
+     * color of the fog
+     */
     var color: ColorRGBa by parameters
 
     init {

@@ -5,7 +5,7 @@ import org.openrndr.color.ColorRGBa
 import org.openrndr.dnky.post.*
 import org.openrndr.draw.ColorFormat
 import org.openrndr.draw.ColorType
-import post.VolumetricLights
+import post.*
 
 class PhotographicRenderer(val renderer: SceneRenderer) {
     var exposure = 1.0
@@ -32,6 +32,7 @@ fun photographicRenderer(volumetricPost:Boolean = false): PhotographicRenderer {
 
     val pr = PhotographicRenderer(sr)
     sr.apply {
+        // -- setup render facets
         outputPass = RenderPass(listOf(
                 DiffuseSpecularFacet(),
                 EmissiveFacet(),
@@ -40,18 +41,36 @@ fun photographicRenderer(volumetricPost:Boolean = false): PhotographicRenderer {
                 ViewPositionFacet(),
                 ViewNormalFacet()
         ))
+
+        postSteps += PostStep(0.5, BloomDownscale(), listOf("emissive"), "bloom-1", ColorFormat.RGBa, ColorType.FLOAT16)
+        postSteps += PostStep(1.0, ApproximateGaussianBlur(), listOf("bloom-1"), "bloom-1", ColorFormat.RGBa, ColorType.FLOAT16)
+
+        for (i in 1 until 6) {
+            postSteps += PostStep(0.5, BloomDownscale(), listOf("bloom-$i"), "bloom-${i+1}", ColorFormat.RGBa, ColorType.FLOAT16)
+            postSteps += PostStep(1.0, ApproximateGaussianBlur(), listOf("bloom-${i+1}"), "bloom-${i+1}", ColorFormat.RGBa, ColorType.FLOAT16)
+        }
+        postSteps += PostStep(2.0, BloomUpscale(), (1..6).map { "bloom-$it"}, "bloom", ColorFormat.RGBa, ColorType.FLOAT16)
+        postSteps += PostStep(1.0, BloomCombine(), listOf("emissive", "bloom"), "emissive", ColorFormat.RGBa, ColorType.FLOAT16)
+
+
+        // -- insert Screen-space ambient occlusions step at half-scale
         postSteps += PostStep(0.5, Ssao(), listOf("viewPosition", "viewNormal"), "ssao", ColorFormat.R, ColorType.FLOAT16)
+
+        // -- insert occlusion denoiser + upscaler
         postSteps += PostStep(2.0, OcclusionBlur(), listOf("ssao", "viewPosition", "viewNormal"), "ssao-4x", ColorFormat.R, ColorType.FLOAT16)
+
+        // --
         postSteps += PostStep(1.0, PostCombiner(), listOf("diffuseSpecular", "emissive", "ssao-4x"), "combined", ColorFormat.RGB, ColorType.FLOAT16)
+
+        // -- insert screen-space local reflections step
         postSteps += PostStep(1.0, Sslr(), listOf("combined", "viewPosition", "viewNormal", "material"), "reflection", ColorFormat.RGB, ColorType.FLOAT16)
-//        postSteps += PostStep(1.0, PositionToCoc(), listOf("reflection", "viewPosition"), "cocImage", ColorFormat.RGBa, ColorType.FLOAT16) {
-//
-//        }
+
+        // -- insert reflection combiner step
         postSteps += PostStep(1.0, SslrCombiner(),
                 listOf("combined", "reflection", "viewPosition", "viewNormal", "material", "baseColor" ),
                 "reflection-combined", ColorFormat.RGB, ColorType.FLOAT16)
 
-
+        // -- insert exponential fog step
         postSteps += postStep(ExponentialFog()) {
             inputs += "reflection-combined"
             inputs += "viewPosition"
@@ -80,6 +99,7 @@ fun photographicRenderer(volumetricPost:Boolean = false): PhotographicRenderer {
             }
         }
 
+        // -- insert DOF pre-process step
         postSteps += postStep(PositionToCoc()) {
             inputs += "fog"
             inputs += "viewPosition"
@@ -97,8 +117,10 @@ fun photographicRenderer(volumetricPost:Boolean = false): PhotographicRenderer {
             }
         }
 
+        // -- insert DOF process step
         postSteps += PostStep(1.0, HexDof(), listOf("cocImage"), "dof", ColorFormat.RGBa, ColorType.FLOAT16)
 
+        // -- insert film-grain step, before tone mapping
         postSteps += postStep(FilmGrain()) {
             inputs += "dof"
             output = "dof"
@@ -110,6 +132,7 @@ fun photographicRenderer(volumetricPost:Boolean = false): PhotographicRenderer {
             }
         }
 
+        // -- insert tone mapping step
         postSteps += postStep(TonemapUncharted2()) {
             inputs += "dof"
             output = "ldr"
@@ -120,6 +143,7 @@ fun photographicRenderer(volumetricPost:Boolean = false): PhotographicRenderer {
             }
         }
 
+        // -- insert anti-aliasing step, through FXAA
         postSteps += PostStep(1.0, FXAA(), listOf("ldr"), "aa", ColorFormat.RGBa, ColorType.UINT8)
     }
     return pr

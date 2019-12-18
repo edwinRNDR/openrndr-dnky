@@ -1,7 +1,5 @@
 package org.openrndr.dnky
 
-import createLtcMagTexture
-import createLtcMatTexture
 import org.openrndr.color.ColorRGBa
 import org.openrndr.draw.*
 import org.openrndr.math.Matrix44

@@ -21,7 +21,7 @@ class ApproximateGaussianBlur : Filter(Shader.createFromCode(Filter.filterVertex
         window = 5
         spread = 1.0
         gain = 1.0
-        sigma = 1.0
+        sigma = 5.0
     }
 
     override fun apply(source: Array<ColorBuffer>, target: Array<ColorBuffer>) {
