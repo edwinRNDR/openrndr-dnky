@@ -20,6 +20,8 @@ class PhotographicRenderer(val renderer: SceneRenderer) {
     var aberrationLinear = 0.0
     var aberrationBlendConstant = 0.0
     var aberrationBlendLinear = 0.0
+
+    var filmGrainGain = 0.1
 }
 
 /**
@@ -128,7 +130,7 @@ fun photographicRenderer(volumetricPost:Boolean = false): PhotographicRenderer {
             outputType = ColorType.FLOAT16
             update = {
                 time = Math.random()*10000
-                this.grainStrength = 0.2
+                this.grainStrength = pr.filmGrainGain
             }
         }
 

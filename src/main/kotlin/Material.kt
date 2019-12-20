@@ -303,6 +303,7 @@ class BasicMaterial : Material {
     var roughness = 1.0
     var emission = ColorRGBa.BLACK
 
+    var vertexPreamble: String? = null
     var vertexTransform: String? = null
     var parameters = mutableMapOf<String, Any>()
     var textures = mutableListOf<Texture>()
@@ -316,6 +317,7 @@ class BasicMaterial : Material {
         copied.metalness = metalness
         copied.roughness = roughness
         copied.emission = emission
+        copied.vertexPreamble = vertexPreamble
         copied.vertexTransform = vertexTransform
         copied.parameters.putAll(parameters)
         copied.textures.addAll(textures.map { it.copy() })
@@ -427,6 +429,7 @@ class BasicMaterial : Material {
             shadeStyle {
                 vertexPreamble = """
 |                    $shaderNoRepetitionVert
+                     ${(this@BasicMaterial.vertexPreamble)?:""}
                 """.trimIndent()
                 fragmentPreamble = """
             |${if (needLTC) ltcShaders else ""}
