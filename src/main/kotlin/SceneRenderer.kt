@@ -11,6 +11,7 @@ import org.openrndr.math.Vector4
 import org.openrndr.math.transforms.scale
 import org.openrndr.math.transforms.translate
 import post.ApproximateGaussianBlur
+import java.nio.Buffer
 
 enum class FacetType(val shaderFacet: String) {
     WORLD_POSITION("f_worldPosition"),
@@ -33,7 +34,7 @@ abstract class ColorBufferFacetCombiner(facets: Set<FacetType>,
                                         val format: ColorFormat,
                                         val type: ColorType) : FacetCombiner(facets, targetOutput)
 
-class MomentsFacet: ColorBufferFacetCombiner( setOf(FacetType.WORLD_POSITION), "moments", ColorFormat.RG, ColorType.FLOAT16) {
+class MomentsFacet : ColorBufferFacetCombiner(setOf(FacetType.WORLD_POSITION), "moments", ColorFormat.RG, ColorType.FLOAT16) {
     override fun generateShader(): String {
         return """
             float depth = length(v_viewPosition);
@@ -44,36 +45,36 @@ class MomentsFacet: ColorBufferFacetCombiner( setOf(FacetType.WORLD_POSITION), "
     }
 }
 
-class DiffuseSpecularFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE, FacetType.SPECULAR),
+class DiffuseSpecularFacet : ColorBufferFacetCombiner(setOf(FacetType.DIFFUSE, FacetType.SPECULAR),
         "diffuseSpecular", ColorFormat.RGB, ColorType.FLOAT16) {
     override fun generateShader(): String =
             "o_$targetOutput = vec4( max(vec3(0.0), f_diffuse.rgb) + max(vec3(0.0), f_specular.rgb), 1.0);"
 }
 
-class MaterialFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE),
+class MaterialFacet : ColorBufferFacetCombiner(setOf(FacetType.DIFFUSE),
         "material", ColorFormat.RGBa, ColorType.UINT8) {
     override fun generateShader(): String =
-        "o_$targetOutput = vec4(m_metalness, m_roughness, 0.0, 1.0);"
+            "o_$targetOutput = vec4(m_metalness, m_roughness, 0.0, 1.0);"
 }
 
-class BaseColorFacet : ColorBufferFacetCombiner( setOf(FacetType.COLOR),
+class BaseColorFacet : ColorBufferFacetCombiner(setOf(FacetType.COLOR),
         "baseColor", ColorFormat.RGB, ColorType.UINT8) {
     override fun generateShader(): String = "o_$targetOutput = vec4(m_color.rgb, 1.0);"
 }
 
-class DiffuseFacet : ColorBufferFacetCombiner( setOf(FacetType.DIFFUSE),
+class DiffuseFacet : ColorBufferFacetCombiner(setOf(FacetType.DIFFUSE),
         "diffuse", ColorFormat.RGB, ColorType.FLOAT16) {
     override fun generateShader(): String =
             "o_$targetOutput = vec4( max(vec3(0.0), f_diffuse.rgb), 1.0 );"
 }
 
-class SpecularFacet : ColorBufferFacetCombiner( setOf(FacetType.SPECULAR),
+class SpecularFacet : ColorBufferFacetCombiner(setOf(FacetType.SPECULAR),
         "diffuseSpecular", ColorFormat.RGB, ColorType.FLOAT16) {
     override fun generateShader(): String =
             "o_$targetOutput = vec4( max(vec3(0.0), f_specular.rgb), 1.0);"
 }
 
-class EmissiveFacet : ColorBufferFacetCombiner( setOf(FacetType.EMISSIVE),
+class EmissiveFacet : ColorBufferFacetCombiner(setOf(FacetType.EMISSIVE),
         "emissive", ColorFormat.RGB, ColorType.FLOAT16) {
     override fun generateShader(): String =
             "o_$targetOutput =  vec4(f_emission, 1.0);"
@@ -113,8 +114,8 @@ val DefaultPass = RenderPass(listOf(LDRColorFacet()))
 val LightPass = RenderPass(emptyList())
 val VSMLightPass = RenderPass(listOf(MomentsFacet()))
 
-fun createPassTarget(pass: RenderPass, width: Int, height: Int, depthFormat: DepthFormat = DepthFormat.DEPTH24): RenderTarget {
-    return renderTarget(width, height) {
+fun createPassTarget(pass: RenderPass, width: Int, height: Int, depthFormat: DepthFormat = DepthFormat.DEPTH24, multisample: BufferMultisample = BufferMultisample.Disabled): RenderTarget {
+    return renderTarget(width, height, multisample = multisample) {
         for (combiner in pass.combiners) {
             when (combiner) {
                 is ColorBufferFacetCombiner ->
@@ -128,6 +129,12 @@ fun createPassTarget(pass: RenderPass, width: Int, height: Int, depthFormat: Dep
 
 class SceneRenderer {
 
+    class Configuration {
+        var multisampleLines = false
+    }
+
+    val configuration = Configuration()
+
     val blur = ApproximateGaussianBlur()
 
     var shadowLightTargets = mutableMapOf<ShadowLight, RenderTarget>()
@@ -137,6 +144,7 @@ class SceneRenderer {
 
     var outputPass = DefaultPass
     var outputPassTarget: RenderTarget? = null
+    var outputPassTargetMS: RenderTarget? = null
 
     val postSteps = mutableListOf<PostStep>()
     val buffers = mutableMapOf<String, ColorBuffer>()
@@ -194,7 +202,7 @@ class SceneRenderer {
 
                     drawer.background(ColorRGBa.PINK)
                     drawer.cullTestPass = CullTestPass.BACK
-                    drawPass(drawer, materialContext, meshes, instancedMeshes, lineMeshes)
+                    drawPass(drawer, pass, materialContext, meshes, instancedMeshes, lineMeshes)
                 }
                 when (shadowLight.shadows) {
                     is Shadows.VSM -> {
@@ -229,7 +237,7 @@ class SceneRenderer {
                     drawer.view = Matrix44.IDENTITY
                     drawer.model = Matrix44.IDENTITY
                     drawer.lookAt(position, position + side.forward, side.up)
-                    drawPass(drawer, materialContext, meshes - content, instancedMeshes, lineMeshes)
+                    drawPass(drawer, pass, materialContext, meshes - content, instancedMeshes, lineMeshes)
                 }
                 cubemap.generateMipmaps()
                 target.detachColorBuffers()
@@ -252,7 +260,7 @@ class SceneRenderer {
                 }
             }
             outputPassTarget?.bind()
-            drawPass(drawer, materialContext, meshes, instancedMeshes, lineMeshes)
+            drawPass(drawer, pass, materialContext, meshes, instancedMeshes, lineMeshes)
             val drawNodes = scene.root.findNodes { drawFunction != null }
             outputPassTarget?.unbind()
 
@@ -292,14 +300,15 @@ class SceneRenderer {
                     drawer.view = Matrix44.IDENTITY
                     drawer.model = Matrix44.IDENTITY
                     val outputName = postSteps.last().output
-                    val outputBuffer = buffers[outputName] ?: throw IllegalArgumentException("can't find $outputName buffer")
+                    val outputBuffer = buffers[outputName]
+                            ?: throw IllegalArgumentException("can't find $outputName buffer")
                     drawer.image(outputBuffer)
                 }
             }
         }
     }
 
-    private fun drawPass(drawer: Drawer, materialContext: MaterialContext,
+    private fun drawPass(drawer: Drawer, pass: RenderPass, materialContext: MaterialContext,
                          meshes: List<NodeContent<Mesh>>,
                          instancedMeshes: List<NodeContent<InstancedMesh>>,
                          lineMeshes: List<NodeContent<LineMesh>>) {
@@ -338,6 +347,18 @@ class SceneRenderer {
             }
         }
 
+
+        val needMS = (pass == outputPass) && configuration.multisampleLines //(materialContext.pass.combiners.any { FacetType.DIFFUSE in it.facets })
+
+        if (needMS) {
+            if (outputPassTargetMS == null) {
+                outputPassTargetMS = createPassTarget(pass, outputPassTarget!!.width, outputPassTarget!!.height, multisample = BufferMultisample.SampleCount(8))
+            }
+            outputPassTarget!!.resolveTo(outputPassTargetMS!!)
+            outputPassTargetMS!!.bind()
+        }
+
+
         lineMeshes.forEach {
             val mesh = it.content
             drawer.isolated {
@@ -350,6 +371,12 @@ class SceneRenderer {
                 drawer.lineStrips(it.content.segments, it.content.weights, it.content.colors)
             }
         }
+
+        if (needMS) {
+            outputPassTargetMS!!.unbind()
+            outputPassTargetMS!!.resolveTo(outputPassTarget!!)
+        }
+
     }
 }
 
