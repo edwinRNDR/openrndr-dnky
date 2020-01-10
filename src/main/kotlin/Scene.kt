@@ -125,6 +125,20 @@ fun SceneNode.instancedMesh(init: InstancedMesh.() -> Unit): InstancedMesh {
     return instanced
 }
 
+fun SceneNode.signedDistanceFunction(init: RayMarcher.() -> Unit): RayMarcher {
+    val sdf = RayMarcher(RayMarcherFunctionType.SIGNED_DISTANCE, "", "", DefaultMaterial)
+    sdf.init()
+    entities.add(sdf)
+    return sdf
+}
+
+fun SceneNode.densityFunction(init: RayMarcher.() -> Unit): RayMarcher {
+    val sdf = RayMarcher(RayMarcherFunctionType.DENSITY, "", "", DefaultMaterial)
+    sdf.init()
+    entities.add(sdf)
+    return sdf
+}
+
 fun SceneNode.pointLight(init: PointLight.() -> Unit): PointLight {
     val pointLight = PointLight().apply(init)
     entities.add(pointLight)
@@ -149,19 +163,19 @@ fun SceneNode.ambientLight(init: AmbientLight.() -> Unit): AmbientLight {
     return ambientLight
 }
 
-fun SceneNode.hemisphereLight(init: HemisphereLight. () -> Unit) : HemisphereLight {
+fun SceneNode.hemisphereLight(init: HemisphereLight. () -> Unit): HemisphereLight {
     val hemisphereLight = HemisphereLight().apply(init)
     entities.add(hemisphereLight)
     return hemisphereLight
 }
 
-fun SceneNode.areaLight(init: AreaLight. () -> Unit) : AreaLight {
+fun SceneNode.areaLight(init: AreaLight. () -> Unit): AreaLight {
     val areaLight = AreaLight().apply(init)
     entities.add(areaLight)
     return areaLight
 }
 
-fun SceneNode.fog(init:Fog.() -> Unit) : Fog {
+fun SceneNode.fog(init: Fog.() -> Unit): Fog {
     val fog = Fog().apply(init)
     entities.add(fog)
     return fog

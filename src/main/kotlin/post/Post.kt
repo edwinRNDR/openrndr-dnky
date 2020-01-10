@@ -3,15 +3,19 @@ package org.openrndr.dnky.post
 import org.openrndr.dnky.PostContext
 import org.openrndr.draw.*
 
-class PostStep(val outputScale: Double,
+interface PostStep {
+    fun apply(buffers: MutableMap<String, ColorBuffer>, postContext: PostContext)
+}
+
+class FilterPostStep(val outputScale: Double,
                val filter: Filter,
                val inputs: List<String>,
                val output: String,
                val outputFormat: ColorFormat,
                val outputType: ColorType,
-               val update: (Filter.(PostContext) -> Unit)? = null) {
+               val update: (Filter.(PostContext) -> Unit)? = null) : PostStep {
 
-    fun apply(buffers: MutableMap<String, ColorBuffer>, postContext: PostContext) {
+    override fun apply(buffers: MutableMap<String, ColorBuffer>, postContext: PostContext) {
         val inputBuffers = inputs.map { buffers[it]!! }
         val outputBuffer = buffers.getOrPut(output) {
             colorBuffer((inputBuffers[0].width * outputScale).toInt(),
@@ -24,7 +28,13 @@ class PostStep(val outputScale: Double,
     }
 }
 
-class PostStepBuilder<T : Filter>(val filter: T) {
+class FunctionPostStep(val function:(MutableMap<String, ColorBuffer>)->Unit) : PostStep {
+    override fun apply(buffers: MutableMap<String, ColorBuffer>, postContext: PostContext) {
+        function(buffers)
+    }
+}
+
+class FilterPostStepBuilder<T : Filter>(val filter: T) {
     var outputScale = 1.0
     val inputs = mutableListOf<String>()
     var output = "untitled"
@@ -34,12 +44,16 @@ class PostStepBuilder<T : Filter>(val filter: T) {
 
     internal fun build(): PostStep {
         @Suppress("UNCHECKED_CAST", "PackageDirectoryMismatch")
-        return PostStep(outputScale, filter, inputs, output, outputFormat, outputType, update as (Filter.(PostContext) -> Unit)?)
+        return FilterPostStep(outputScale, filter, inputs, output, outputFormat, outputType, update as (Filter.(PostContext) -> Unit)?)
     }
 }
 
-fun <T : Filter> postStep(filter: T, configure: PostStepBuilder<T>.() -> Unit) : PostStep {
-    val psb = PostStepBuilder(filter)
+fun <T : Filter> postStep(filter: T, configure: FilterPostStepBuilder<T>.() -> Unit) : PostStep {
+    val psb = FilterPostStepBuilder(filter)
     psb.configure()
     return psb.build()
+}
+
+fun postStep(function: (MutableMap<String,ColorBuffer>)->Unit) : PostStep {
+    return FunctionPostStep(function)
 }

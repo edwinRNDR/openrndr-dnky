@@ -26,7 +26,7 @@ class Ssao : Filter(Shader.createFromCode(filterVertexCode, filterFragmentCode("
         positions = 0
         normals = 1
         projection = Matrix44.IDENTITY
-        radius = 2.0
+        radius = 1.0
     }
 }
 

@@ -1,6 +1,7 @@
 package org.openrndr.dnky
 
 import org.openrndr.color.ColorRGBa
+import org.openrndr.dnky.post.FilterPostStep
 import org.openrndr.dnky.post.PostStep
 import org.openrndr.dnky.post.Ssao
 import org.openrndr.dnky.post.Sslr
@@ -11,7 +12,6 @@ import org.openrndr.math.Vector4
 import org.openrndr.math.transforms.scale
 import org.openrndr.math.transforms.translate
 import post.ApproximateGaussianBlur
-import java.nio.Buffer
 
 enum class FacetType(val shaderFacet: String) {
     WORLD_POSITION("f_worldPosition"),
@@ -22,6 +22,8 @@ enum class FacetType(val shaderFacet: String) {
     SPECULAR("f_specular"),
     DIFFUSE("f_diffuse"),
     EMISSIVE("f_emission"),
+    AMBIENT("f_ambient"),
+    OCCLUSION("f_occlusion"),
     COLOR("m_color"),
 }
 
@@ -32,7 +34,8 @@ abstract class FacetCombiner(val facets: Set<FacetType>, val targetOutput: Strin
 abstract class ColorBufferFacetCombiner(facets: Set<FacetType>,
                                         targetOutput: String,
                                         val format: ColorFormat,
-                                        val type: ColorType) : FacetCombiner(facets, targetOutput)
+                                        val type: ColorType,
+                                        val blendMode: BlendMode = BlendMode.REPLACE) : FacetCombiner(facets, targetOutput)
 
 class MomentsFacet : ColorBufferFacetCombiner(setOf(FacetType.WORLD_POSITION), "moments", ColorFormat.RG, ColorType.FLOAT16) {
     override fun generateShader(): String {
@@ -50,6 +53,18 @@ class DiffuseSpecularFacet : ColorBufferFacetCombiner(setOf(FacetType.DIFFUSE, F
     override fun generateShader(): String =
             "o_$targetOutput = vec4( max(vec3(0.0), f_diffuse.rgb) + max(vec3(0.0), f_specular.rgb), 1.0);"
 }
+class DiffuseSpecularAlphaFacet : ColorBufferFacetCombiner(setOf(FacetType.DIFFUSE, FacetType.SPECULAR),
+        "diffuseSpecular", ColorFormat.RGB, ColorType.FLOAT16) {
+    override fun generateShader(): String =
+            "o_$targetOutput = vec4( (max(vec3(0.0), f_diffuse.rgb) + max(vec3(0.0), f_specular.rgb)) * f_alpha, f_alpha);"
+}
+
+class AmbientOcclusionFacet : ColorBufferFacetCombiner(setOf(FacetType.AMBIENT, FacetType.OCCLUSION),
+        "ambientOcclusion", ColorFormat.RGBa, ColorType.FLOAT16) {
+    override fun generateShader(): String =
+            "o_$targetOutput = vec4(f_ambient, f_occlusion);"
+}
+
 
 class MaterialFacet : ColorBufferFacetCombiner(setOf(FacetType.DIFFUSE),
         "material", ColorFormat.RGBa, ColorType.UINT8) {
@@ -74,11 +89,19 @@ class SpecularFacet : ColorBufferFacetCombiner(setOf(FacetType.SPECULAR),
             "o_$targetOutput = vec4( max(vec3(0.0), f_specular.rgb), 1.0);"
 }
 
-class EmissiveFacet : ColorBufferFacetCombiner(setOf(FacetType.EMISSIVE),
+class EmissiveFacet: ColorBufferFacetCombiner(setOf(FacetType.EMISSIVE),
         "emissive", ColorFormat.RGB, ColorType.FLOAT16) {
     override fun generateShader(): String =
             "o_$targetOutput =  vec4(f_emission, 1.0);"
 }
+
+class EmissiveAlphaFacet: ColorBufferFacetCombiner(setOf(FacetType.EMISSIVE),
+        "emissive", ColorFormat.RGB, ColorType.FLOAT16, BlendMode.OVER) {
+    override fun generateShader(): String =
+            "o_$targetOutput =  vec4(f_emission, f_alpha);"
+}
+
+
 
 class PositionFacet : ColorBufferFacetCombiner(setOf(FacetType.WORLD_POSITION), "position", ColorFormat.RGB, ColorType.FLOAT16) {
     override fun generateShader(): String = "o_$targetOutput = vec4(v_worldPosition.rgb, 1.0);"
@@ -108,7 +131,7 @@ class LDRColorFacet : ColorBufferFacetCombiner(setOf(FacetType.DIFFUSE, FacetTyp
     """
 }
 
-class RenderPass(val combiners: List<FacetCombiner>)
+class RenderPass(val combiners: List<FacetCombiner>, val renderOpaque: Boolean = true, val renderTransparent: Boolean = false)
 
 val DefaultPass = RenderPass(listOf(LDRColorFacet()))
 val LightPass = RenderPass(emptyList())
@@ -142,7 +165,7 @@ class SceneRenderer {
 
     var cubemapDepthBuffer = depthBuffer(256, 256, DepthFormat.DEPTH16, BufferMultisample.Disabled)
 
-    var outputPass = DefaultPass
+    var outputPasses = mutableListOf(DefaultPass)
     var outputPassTarget: RenderTarget? = null
     var outputPassTargetMS: RenderTarget? = null
 
@@ -173,6 +196,7 @@ class SceneRenderer {
         val instancedMeshes = scene.root.findContent { this as? InstancedMesh }
         val lineMeshes = scene.root.findContent { this as? LineMesh }
         val environmentMapMeshes = meshes.filter { (it.content.material as? BasicMaterial)?.environmentMap == true }
+        val signedDistanceFunctions = scene.root.findContent { this as? RayMarcher }
 
         run {
             lights.filter { it.content is ShadowLight && (it.content as ShadowLight).shadows is Shadows.MappedShadows }.forEach {
@@ -200,9 +224,9 @@ class SceneRenderer {
                     drawer.view = look
                     drawer.model = Matrix44.IDENTITY
 
-                    drawer.background(ColorRGBa.PINK)
-                    drawer.cullTestPass = CullTestPass.BACK
-                    drawPass(drawer, pass, materialContext, meshes, instancedMeshes, lineMeshes)
+                    drawer.background(ColorRGBa.BLACK)
+                    drawer.cullTestPass = CullTestPass.FRONT
+                    drawPass(drawer, pass, materialContext, meshes, instancedMeshes, lineMeshes, signedDistanceFunctions)
                 }
                 when (shadowLight.shadows) {
                     is Shadows.VSM -> {
@@ -237,7 +261,7 @@ class SceneRenderer {
                     drawer.view = Matrix44.IDENTITY
                     drawer.model = Matrix44.IDENTITY
                     drawer.lookAt(position, position + side.forward, side.up)
-                    drawPass(drawer, pass, materialContext, meshes - content, instancedMeshes, lineMeshes)
+                    drawPass(drawer, pass, materialContext, meshes - content, instancedMeshes, lineMeshes, signedDistanceFunctions)
                 }
                 cubemap.generateMipmaps()
                 target.detachColorBuffers()
@@ -247,49 +271,63 @@ class SceneRenderer {
         }
 
         run {
-            val pass = outputPass
-            val materialContext = MaterialContext(pass, lights, fogs, shadowLightTargets, meshCubemaps)
+            //val pass = outputPasses
+            for (pass in outputPasses) {
+                val materialContext = MaterialContext(pass, lights, fogs, shadowLightTargets, meshCubemaps)
 
-            if ((pass != DefaultPass || postSteps.isNotEmpty()) && outputPassTarget == null) {
-                outputPassTarget = createPassTarget(outputPass, RenderTarget.active.width, RenderTarget.active.height)
-            }
+                if ((pass != DefaultPass || postSteps.isNotEmpty()) && outputPassTarget == null) {
+                    outputPassTarget = createPassTarget(pass, RenderTarget.active.width, RenderTarget.active.height)
+                }
 
-            outputPassTarget?.let {
-                drawer.withTarget(it) {
-                    background(ColorRGBa.PINK)
+                if (pass == outputPasses[0]) {
+                    outputPassTarget?.let {
+                        drawer.withTarget(it) {
+                            background(ColorRGBa.PINK)
+                        }
+                    }
+                }
+                outputPassTarget?.let { target ->
+                    pass.combiners.forEach {
+                        if (it is ColorBufferFacetCombiner) {
+                            val index = target.colorBufferIndex(it.targetOutput)
+                            target.blendMode(index, it.blendMode)
+                        }
+                    }
+                }
+                outputPassTarget?.bind()
+                drawPass(drawer, pass, materialContext, meshes, instancedMeshes, lineMeshes, signedDistanceFunctions)
+                val drawNodes = scene.root.findNodes { drawFunction != null }
+                outputPassTarget?.unbind()
+
+                drawNodes.forEach {
+                    drawer.isolated {
+                        drawer.model = it.worldTransform
+                        it.drawFunction?.invoke(drawer)
+                    }
+                }
+
+                outputPassTarget?.let { output ->
+                    for (combiner in pass.combiners) {
+                        buffers[combiner.targetOutput] = output.colorBuffer(combiner.targetOutput)
+                    }
                 }
             }
-            outputPassTarget?.bind()
-            drawPass(drawer, pass, materialContext, meshes, instancedMeshes, lineMeshes)
-            val drawNodes = scene.root.findNodes { drawFunction != null }
-            outputPassTarget?.unbind()
-
-            drawNodes.forEach {
-                drawer.isolated {
-                    drawer.model = it.worldTransform
-                    it.drawFunction?.invoke(drawer)
-                }
-            }
-
-            outputPassTarget?.let { output ->
-                for (combiner in outputPass.combiners) {
-                    buffers[combiner.targetOutput] = output.colorBuffer(combiner.targetOutput)
-                }
-            }
-
             val lightContext = LightContext(lights, shadowLightTargets)
             val postContext = PostContext(lightContext, drawer.view.inversed)
 
             for (postStep in postSteps) {
-                if (postStep.filter is Ssao) {
-                    postStep.filter.projection = drawer.projection
-                }
-                if (postStep.filter is Sslr) {
-                    val p = Matrix44.scale(drawer.width / 2.0, drawer.height / 2.0, 1.0) * Matrix44.translate(Vector3(1.0, 1.0, 0.0)) * drawer.projection
-                    postStep.filter.projection = p
+                if (postStep is FilterPostStep) {
+                    if (postStep.filter is Ssao) {
+                        postStep.filter.projection = drawer.projection
+                    }
+                    if (postStep.filter is Sslr) {
+                        val p = Matrix44.scale(drawer.width / 2.0, drawer.height / 2.0, 1.0) * Matrix44.translate(Vector3(1.0, 1.0, 0.0)) * drawer.projection
+                        postStep.filter.projection = p
+                    }
                 }
                 postStep.apply(buffers, postContext)
             }
+
         }
 
         drawer.popStyle()
@@ -299,7 +337,7 @@ class SceneRenderer {
                     drawer.ortho()
                     drawer.view = Matrix44.IDENTITY
                     drawer.model = Matrix44.IDENTITY
-                    val outputName = postSteps.last().output
+                    val outputName = (postSteps.last() as FilterPostStep).output
                     val outputBuffer = buffers[outputName]
                             ?: throw IllegalArgumentException("can't find $outputName buffer")
                     drawer.image(outputBuffer)
@@ -311,10 +349,21 @@ class SceneRenderer {
     private fun drawPass(drawer: Drawer, pass: RenderPass, materialContext: MaterialContext,
                          meshes: List<NodeContent<Mesh>>,
                          instancedMeshes: List<NodeContent<InstancedMesh>>,
-                         lineMeshes: List<NodeContent<LineMesh>>) {
-        meshes.forEach {
+                         lineMeshes: List<NodeContent<LineMesh>>,
+                         signedDistanceFunctions: List<NodeContent<RayMarcher>>) {
+
+
+
+        // -- draw all meshes
+        meshes
+                .filter { (it.content.material.transparent && pass.renderTransparent) || (!it.content.material.transparent && pass.renderOpaque) }
+                .forEach {
             val mesh = it.content
             drawer.isolated {
+                if (mesh.material.doubleSided) {
+                    drawer.drawStyle.cullTestPass = CullTestPass.ALWAYS
+                }
+
                 val shadeStyle = mesh.material.generateShadeStyle(materialContext)
                 shadeStyle.parameter("viewMatrixInverse", drawer.view.inversed)
                 mesh.material.applyToShadeStyle(materialContext, shadeStyle, mesh)
@@ -327,7 +376,10 @@ class SceneRenderer {
             }
         }
 
-        instancedMeshes.forEach {
+        // -- draw all instanced meshes
+        instancedMeshes
+                .filter { (it.content.material.transparent && pass.renderTransparent) || (!it.content.material.transparent && pass.renderOpaque) }
+                .forEach {
             val mesh = it.content
             drawer.isolated {
                 val shadeStyle = mesh.material.generateShadeStyle(materialContext)
@@ -348,33 +400,77 @@ class SceneRenderer {
         }
 
 
-        val needMS = (pass == outputPass) && configuration.multisampleLines //(materialContext.pass.combiners.any { FacetType.DIFFUSE in it.facets })
+        val effectiveLineMeshes = lineMeshes.filter { (it.content.material.transparent && pass.renderTransparent) || (!it.content.material.transparent && pass.renderOpaque) }
 
-        if (needMS) {
-            if (outputPassTargetMS == null) {
-                outputPassTargetMS = createPassTarget(pass, outputPassTarget!!.width, outputPassTarget!!.height, multisample = BufferMultisample.SampleCount(8))
+
+        // -- draw all line meshes
+        if (effectiveLineMeshes.isNotEmpty()) {
+            // -- determine if line meshes will be rendered on a multi sample target
+            val needMS = (pass in outputPasses) && configuration.multisampleLines //(materialContext.pass.combiners.any { FacetType.DIFFUSE in it.facets })
+            if (needMS) {
+                if (outputPassTargetMS == null) {
+                    outputPassTargetMS = createPassTarget(pass, outputPassTarget!!.width, outputPassTarget!!.height, multisample = BufferMultisample.SampleCount(8))
+                }
+                outputPassTarget!!.resolveTo(outputPassTargetMS!!)
+                outputPassTargetMS!!.bind()
             }
-            outputPassTarget!!.resolveTo(outputPassTargetMS!!)
-            outputPassTargetMS!!.bind()
+
+            effectiveLineMeshes.forEach {
+                val mesh = it.content
+                drawer.isolated {
+                    val shadeStyle = mesh.material.generateShadeStyle(materialContext)
+                    shadeStyle.parameter("viewMatrixInverse", drawer.view.inversed)
+                    drawer.drawStyle.cullTestPass = CullTestPass.ALWAYS
+                    mesh.material.applyToShadeStyle(materialContext, shadeStyle, mesh)
+                    drawer.shadeStyle = shadeStyle
+                    drawer.model = it.node.worldTransform
+                    drawer.lineStrips(it.content.segments, it.content.weights, it.content.colors)
+                }
+            }
+
+            if (needMS) {
+                outputPassTargetMS!!.unbind()
+                outputPassTargetMS!!.resolveTo(outputPassTarget!!)
+            }
         }
 
+        // -- draw all signed distance functions
+        run {
+            signedDistanceFunctions
+                    .filter { (it.content.material.transparent && pass.renderTransparent) || (!it.content.material.transparent && pass.renderOpaque) }
+                    .forEach {
+                val art = RenderTarget.active
 
-        lineMeshes.forEach {
-            val mesh = it.content
-            drawer.isolated {
-                val shadeStyle = mesh.material.generateShadeStyle(materialContext)
-                shadeStyle.parameter("viewMatrixInverse", drawer.view.inversed)
-                drawer.drawStyle.cullTestPass = CullTestPass.ALWAYS
-                mesh.material.applyToShadeStyle(materialContext, shadeStyle, mesh)
-                drawer.shadeStyle = shadeStyle
-                drawer.model = it.node.worldTransform
-                drawer.lineStrips(it.content.segments, it.content.weights, it.content.colors)
+                if (art.hasColorBuffer) {
+                    val sdf = it.content
+                    val shadeStyle = sdf.generateShadeStyle(materialContext)
+
+                    shadeStyle.parameter("viewMatrixInverse", drawer.view.inversed)
+                    shadeStyle.parameter("projectionMatrixInverse", drawer.projection.inversed)
+
+                    val tempDepth = depthBuffer(art.width, art.height, format = DepthFormat.DEPTH24, multisample = BufferMultisample.Disabled)
+
+                    art.depthBuffer!!.copyTo(tempDepth)
+                    shadeStyle.parameter("depthBuffer", art.depthBuffer!!)
+                    sdf.material.applyToShadeStyle(materialContext, shadeStyle, sdf)
+
+
+                    val depthBufferOut = RenderTarget.active.depthBuffer
+
+                    val filter = ShadeStyleFilter(shadeStyle)
+                    depthBufferOut?.let {
+                        filter.depthBufferOut = it
+                    }
+
+                    filter.effectiveShader.begin()
+                    drawer.context.applyToShader(filter.effectiveShader)
+                    filter.effectiveShader.end()
+
+                    filter.apply(emptyArray(), RenderTarget.active.colorBuffers.toTypedArray())
+                    tempDepth.destroy()
+                }
             }
-        }
 
-        if (needMS) {
-            outputPassTargetMS!!.unbind()
-            outputPassTargetMS!!.resolveTo(outputPassTarget!!)
         }
 
     }

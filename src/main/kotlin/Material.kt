@@ -25,6 +25,7 @@ data class MaterialContext(val pass: RenderPass,
 
 interface Material {
     var doubleSided: Boolean
+    var transparent: Boolean
     fun generateShadeStyle(context: MaterialContext): ShadeStyle
     fun applyToShadeStyle(context: MaterialContext, shadeStyle: ShadeStyle, entity: Entity)
 }
@@ -63,7 +64,7 @@ private fun PointLight.fs(index: Int): String = """
 }
 """.trimMargin()
 
-private fun AmbientLight.fs(index: Int): String = "f_diffuse += p_lightColor$index.rgb;"
+private fun AmbientLight.fs(index: Int): String = "f_ambient += p_lightColor$index.rgb * ((1.0 - m_metalness) * m_color.rgb);"
 
 private fun DirectionalLight.fs(index: Int) = """
 |{
@@ -73,7 +74,7 @@ private fun DirectionalLight.fs(index: Int) = """
 |    float NoL = clamp(dot(N, L), 0.0, 1.0);
 |    float LoH = clamp(dot(L, H), 0.0, 1.0);
 |    float NoH = clamp(dot(N, H), 0.0, 1.0);
-|    vec3 Lr = p_lightPosition$index - v_worldPosition;
+|    vec3 Lr = (p_lightPosition$index - v_worldPosition);
 //|    vec3 L = normalize(Lr);
 |    ${shadows.fs(index)}
 |    
@@ -90,7 +91,7 @@ private fun HemisphereLight.fs(index: Int): String = """
 |{
 |   float f = dot(N, p_lightDirection$index) * 0.5 + 0.5;
 |   vec3 irr = ${irradianceMap?.let { "texture(p_lightIrradianceMap$index, N).rgb" } ?: "vec3(1.0)"};
-|   f_diffuse += mix(p_lightDownColor$index.rgb, p_lightUpColor$index.rgb, f) * irr * ((1.0 - m_metalness) * m_color.rgb ) * m_ambientOcclusion;
+|   f_ambient += mix(p_lightDownColor$index.rgb, p_lightUpColor$index.rgb, f) * irr * ((1.0 - m_metalness) * m_color.rgb);// * m_ambientOcclusion;
 |}
 """.trimMargin()
 
@@ -257,7 +258,7 @@ private fun Triplanar.fs(index: Int, target: TextureTarget) = """
 |   tex$index = tX * weights.x + tY * weights.y + weights.z * tZ;
 |   ${if (target == TextureTarget.NORMAL) """
     |   vec3 tnX = normalize( tX.xyz - vec3(0.5, 0.5, 0.0));
-    |   vec3 tnY = normalize( tY.xyz - vec3(0.5, 0.5, 0.0));
+    |   vec3 tnY = normalize( tY.xyz - vec3(0.5, 0.5, 0.0)) * vec3(1.0, -1.0, 1.0);
     |   vec3 tnZ = normalize( tZ.xyz - vec3(0.5, 0.5, 0.0));
     |   vec3 nX = vec3(0.0, tnX.yx);
     |   vec3 nY = vec3(tnY.x, 0.0, tnY.y);
@@ -296,11 +297,12 @@ class Texture(var source: TextureSource,
 
 class BasicMaterial : Material {
     override var doubleSided: Boolean = false
-
+    override var transparent: Boolean = false
     var environmentMap = false
     var color = ColorRGBa.WHITE
     var metalness = 0.5
     var roughness = 1.0
+    var opacity = 1.0
     var emission = ColorRGBa.BLACK
 
     var vertexPreamble: String? = null
@@ -314,6 +316,7 @@ class BasicMaterial : Material {
         val copied = BasicMaterial()
         copied.environmentMap = environmentMap
         copied.color = color
+        copied.opacity = opacity
         copied.metalness = metalness
         copied.roughness = roughness
         copied.emission = emission
@@ -333,10 +336,11 @@ class BasicMaterial : Material {
             float m_f0 = 0.5;
             float m_roughness = p_roughness;
             float m_metalness = p_metalness;
+            float m_opacity = p_opacity;
             float m_ambientOcclusion = 1.0;
             vec3 m_emission = p_emission.rgb;
             vec3 m_normal = vec3(0.0, 0.0, 1.0);
-            float f_alpha = 1.0;
+            float f_alpha = m_opacity;
             vec4 f_fog = vec4(0.0, 0.0, 0.0, 0.0);
             vec3 f_worldNormal = v_worldNormal;
         """.trimIndent()
@@ -385,6 +389,8 @@ class BasicMaterial : Material {
         vec3 f_diffuse = vec3(0.0);
         vec3 f_specular = vec3(0.0);
         vec3 f_emission = m_emission;
+        vec3 f_ambient = vec3(0.0);
+        float f_occlusion = 1.0;
         vec3 N = normalize(f_worldNormal);
         vec3 ep = (p_viewMatrixInverse * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         vec3 Vr = ep - v_worldPosition;
@@ -473,6 +479,7 @@ class BasicMaterial : Material {
         shadeStyle.parameter("color", color)
         shadeStyle.parameter("metalness", metalness)
         shadeStyle.parameter("roughness", roughness)
+        shadeStyle.parameter("opacity", opacity)
 
         parameters.forEach { (k, v) ->
             when (v) {

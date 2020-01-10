@@ -57,7 +57,8 @@ bool traceScreenSpaceRay1
     float           maxSteps,
     in float        maxRayTraceDistance,
     out vec2      hitPixel,
-	out vec3		csHitPoint
+	out vec3		csHitPoint,
+    out vec3 csHitNormal
 //    ,out vec3      debugColor
     ) {
     vec3 debugColor = vec3(0);
@@ -244,6 +245,7 @@ bool traceScreenSpaceRay1
              vec4 depthData = texelFetch(csZBuffer, ivec2(hitPixel), 0);
             sceneZMax = depthData.z;
 
+            csHitNormal = texelFetch(normals, ivec2(hitPixel), 0).xyz;
 
 //            sceneZMax = texelFetch(csZBuffer, ivec2(hitPixel), 0).r;
 
@@ -285,6 +287,7 @@ bool traceScreenSpaceRay1
 void main() {
     vec2 hitPixel = vec2(0.0, 0.0);
     vec3 hitPoint = vec3(0.0, 0.0, 0.0);
+    vec3 hitNormal = vec3(0.0, 0.0, 0.0);
 
     vec2 jitter = abs(hash22(v_texCoord0));
     vec4 materialData = texture(material, v_texCoord0);
@@ -295,6 +298,10 @@ void main() {
     vec3 viewPos = texture(positions, v_texCoord0).xyz;
     vec3 reflected = normalize(reflect(normalize(viewPos), normalize(viewNormal)));
 
+    vec4 projPos = projection * vec4(viewPos, 1.0);
+    projPos.xyz /= projPos.w;
+
+    float angle = abs(dot(reflected, viewNormal));
     float frontalFade = clamp(-reflected.z,0, 1);
     if ( true ) {
         bool hit = traceScreenSpaceRay1(
@@ -304,14 +311,14 @@ void main() {
             positions,
             ts,
             0.2,
-            0.0,
-            4.0, // stride
-            1.0,
-            iterationLimit,
-            distanceLimit,
+            0.0, // near plane z
+            4.0,// + projPos.z*2.0, // stride
+            0.9, // jitterfraction
+            iterationLimit*4,// + int((1.0-projPos.z)*iterationLimit),
+            2.0,
 
             hitPixel,
-            hitPoint);
+            hitPoint, hitNormal);
 
         float distanceFade = max( 0.0, (distanceLimit -length(hitPoint-viewPos))/ distanceLimit);
         vec4 p = projection * vec4(hitPoint, 1.0);
@@ -322,9 +329,25 @@ void main() {
         vec2 ad = vec2(ts/2- abs(pos - ts/2));
         float borderFade = smoothstep(0, borderWidth, min(ad.x, ad.y));
 
-        vec4 reflectedColor = texelFetch(colors, ivec2(p.xy*k), 0);
+        float l = materialData.g * 4.0;
+        int l0 = int(l);
+        int l1 = l0 + 1;
+
+        float lf = l - l0;
+
+        vec4 reflectedColor0 = texelFetch(colors, ivec2(p.xy*k)/(1<<l0), l0);
+        vec4 reflectedColor1 = texelFetch(colors, ivec2(p.xy*k)/(1<<l1), l1);
+
+        vec4 reflectedColor = reflectedColor0 * (1.0-lf) + reflectedColor1 * lf;
+
+     //   vec2 uv = vec2(p.xy*k) / textureSize(colors, 0);
+
+        //reflectedColor = textureLod(colors, uv, l);
+
         float hitFade = hit? 1.0: 0.0;
-        o_color.rgb = (1.0 * reflectedColor.rgb * hitFade  * frontalFade * distanceFade * borderFade);
+        float angleFade = 1.0;/// smoothstep(0.0, 0.3, angle);;//angle < 0.5? 0.0 : 1.0;
+        float faceFade = step(0.00001, dot(-normalize(hitNormal), reflected));
+        o_color.rgb = (1.0 * reflectedColor.rgb * hitFade  * frontalFade * distanceFade * borderFade * angleFade * faceFade);
         o_color.a = 1.0;
     } else {
         o_color =  texture(colors, v_texCoord0).rgba;

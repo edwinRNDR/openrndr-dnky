@@ -3,8 +3,7 @@ package org.openrndr.dnky
 import FilmGrain
 import org.openrndr.color.ColorRGBa
 import org.openrndr.dnky.post.*
-import org.openrndr.draw.ColorFormat
-import org.openrndr.draw.ColorType
+import org.openrndr.draw.*
 import post.*
 
 class PhotographicRenderer(val renderer: SceneRenderer) {
@@ -35,40 +34,78 @@ fun photographicRenderer(volumetricPost:Boolean = false): PhotographicRenderer {
     val pr = PhotographicRenderer(sr)
     sr.apply {
         // -- setup render facets
-        outputPass = RenderPass(listOf(
+        outputPasses = mutableListOf(RenderPass(listOf(
                 DiffuseSpecularFacet(),
                 EmissiveFacet(),
                 MaterialFacet(),
                 BaseColorFacet(),
+                AmbientOcclusionFacet(),
                 ViewPositionFacet(),
                 ViewNormalFacet()
-        ))
+        )), RenderPass(listOf(
+                DiffuseSpecularAlphaFacet(),
+                EmissiveAlphaFacet(),
+                MaterialFacet(),
+                BaseColorFacet(),
+                AmbientOcclusionFacet(),
+                ViewPositionFacet(),
+                ViewNormalFacet()
+        ), renderOpaque = false, renderTransparent = true))
 
-        postSteps += PostStep(0.5, BloomDownscale(), listOf("emissive"), "bloom-1", ColorFormat.RGBa, ColorType.FLOAT16)
-        postSteps += PostStep(1.0, ApproximateGaussianBlur(), listOf("bloom-1"), "bloom-1", ColorFormat.RGBa, ColorType.FLOAT16)
+        postSteps += FilterPostStep(0.5, BloomDownscale(), listOf("emissive"), "bloom-1", ColorFormat.RGBa, ColorType.FLOAT16)
+        postSteps += FilterPostStep(1.0, ApproximateGaussianBlur(), listOf("bloom-1"), "bloom-1", ColorFormat.RGBa, ColorType.FLOAT16)
 
         for (i in 1 until 6) {
-            postSteps += PostStep(0.5, BloomDownscale(), listOf("bloom-$i"), "bloom-${i+1}", ColorFormat.RGBa, ColorType.FLOAT16)
-            postSteps += PostStep(1.0, ApproximateGaussianBlur(), listOf("bloom-${i+1}"), "bloom-${i+1}", ColorFormat.RGBa, ColorType.FLOAT16)
+            postSteps += FilterPostStep(0.5, BloomDownscale(), listOf("bloom-$i"), "bloom-${i+1}", ColorFormat.RGBa, ColorType.FLOAT16)
+            postSteps += FilterPostStep(1.0, ApproximateGaussianBlur(), listOf("bloom-${i+1}"), "bloom-${i+1}", ColorFormat.RGBa, ColorType.FLOAT16)
         }
-        postSteps += PostStep(2.0, BloomUpscale(), (1..6).map { "bloom-$it"}, "bloom", ColorFormat.RGBa, ColorType.FLOAT16)
-        postSteps += PostStep(1.0, BloomCombine(), listOf("emissive", "bloom"), "emissive", ColorFormat.RGBa, ColorType.FLOAT16)
+        postSteps += FilterPostStep(2.0, BloomUpscale(), (1..6).map { "bloom-$it"}, "bloom", ColorFormat.RGBa, ColorType.FLOAT16)
+        //postSteps += FilterPostStep(1.0, BloomCombine(), listOf("emissive", "bloom"), "emissive", ColorFormat.RGBa, ColorType.FLOAT16)
 
 
         // -- insert Screen-space ambient occlusions step at half-scale
-        postSteps += PostStep(0.5, Ssao(), listOf("viewPosition", "viewNormal"), "ssao", ColorFormat.R, ColorType.FLOAT16)
+        postSteps += FilterPostStep(0.5, Ssao(), listOf("viewPosition", "viewNormal"), "ssao", ColorFormat.R, ColorType.FLOAT16)
 
         // -- insert occlusion denoiser + upscaler
-        postSteps += PostStep(2.0, OcclusionBlur(), listOf("ssao", "viewPosition", "viewNormal"), "ssao-4x", ColorFormat.R, ColorType.FLOAT16)
+        postSteps += FilterPostStep(2.0, OcclusionBlur(), listOf("ssao", "viewPosition", "viewNormal"), "ssao-4x", ColorFormat.R, ColorType.FLOAT16)
 
         // --
-        postSteps += PostStep(1.0, PostCombiner(), listOf("diffuseSpecular", "emissive", "ssao-4x"), "combined", ColorFormat.RGB, ColorType.FLOAT16)
+        postSteps += FilterPostStep(1.0, PostCombiner(), listOf("diffuseSpecular", "emissive", "ssao-4x", "ambientOcclusion"), "combined", ColorFormat.RGB, ColorType.FLOAT16)
+
+
+        // -- gaussian pyramid for reflections
+        postSteps += FilterPostStep(0.5, BloomDownscale(), listOf("combined"), "combined-1", ColorFormat.RGBa, ColorType.FLOAT16)
+        postSteps += FilterPostStep(1.0, ApproximateGaussianBlur(), listOf("combined-1"), "combined-1", ColorFormat.RGBa, ColorType.FLOAT16)
+
+        for (i in 1 until 6) {
+            postSteps += FilterPostStep(0.5, BloomDownscale(), listOf("combined-$i"), "combined-${i+1}", ColorFormat.RGB, ColorType.FLOAT16)
+            //postSteps += FilterPostStep(1.0, ApproximateGaussianBlur(), listOf("combined-${i+1}"), "combined-${i+1}", ColorFormat.RGBa, ColorType.FLOAT16)
+        }
+
+        postSteps += postStep {
+            val source = it.getValue("combined")
+            val target = it.getOrPut("pyramid") {
+                colorBuffer(source.width, source.height, format = ColorFormat.RGB, type = ColorType.FLOAT16, levels = 6).apply {
+                }
+            }
+            target.filter(MinifyingFilter.LINEAR, MagnifyingFilter.LINEAR)
+            it.getValue("combined").copyTo(target, 0, 0)
+            it.getValue("combined-1").copyTo(target, 0, 1)
+            it.getValue("combined-2").copyTo(target, 0, 2)
+            it.getValue("combined-3").copyTo(target, 0, 3)
+            it.getValue("combined-4").copyTo(target, 0, 4)
+            it.getValue("combined-5").copyTo(target, 0, 5)
+
+            target.filter(MinifyingFilter.LINEAR_MIPMAP_LINEAR, MagnifyingFilter.LINEAR)
+            //target.generateMipmaps()
+        }
+
 
         // -- insert screen-space local reflections step
-        postSteps += PostStep(1.0, Sslr(), listOf("combined", "viewPosition", "viewNormal", "material"), "reflection", ColorFormat.RGB, ColorType.FLOAT16)
+        postSteps += FilterPostStep(1.0, Sslr(), listOf("pyramid", "viewPosition", "viewNormal", "material"), "reflection", ColorFormat.RGB, ColorType.FLOAT16)
 
         // -- insert reflection combiner step
-        postSteps += PostStep(1.0, SslrCombiner(),
+        postSteps += FilterPostStep(1.0, SslrCombiner(),
                 listOf("combined", "reflection", "viewPosition", "viewNormal", "material", "baseColor" ),
                 "reflection-combined", ColorFormat.RGB, ColorType.FLOAT16)
 
@@ -120,7 +157,7 @@ fun photographicRenderer(volumetricPost:Boolean = false): PhotographicRenderer {
         }
 
         // -- insert DOF process step
-        postSteps += PostStep(1.0, HexDof(), listOf("cocImage"), "dof", ColorFormat.RGBa, ColorType.FLOAT16)
+        postSteps += FilterPostStep(1.0, HexDof(), listOf("cocImage"), "dof", ColorFormat.RGBa, ColorType.FLOAT16)
 
         // -- insert film-grain step, before tone mapping
         postSteps += postStep(FilmGrain()) {
@@ -146,7 +183,7 @@ fun photographicRenderer(volumetricPost:Boolean = false): PhotographicRenderer {
         }
 
         // -- insert anti-aliasing step, through FXAA
-        postSteps += PostStep(1.0, FXAA(), listOf("ldr"), "aa", ColorFormat.RGBa, ColorType.UINT8)
+        postSteps += FilterPostStep(1.0, FXAA(), listOf("ldr"), "aa", ColorFormat.RGBa, ColorType.UINT8)
     }
     return pr
 }
