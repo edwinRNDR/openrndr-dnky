@@ -60,7 +60,7 @@ fun photographicRenderer(volumetricPost:Boolean = false): PhotographicRenderer {
             postSteps += FilterPostStep(1.0, ApproximateGaussianBlur(), listOf("bloom-${i+1}"), "bloom-${i+1}", ColorFormat.RGBa, ColorType.FLOAT16)
         }
         postSteps += FilterPostStep(2.0, BloomUpscale(), (1..6).map { "bloom-$it"}, "bloom", ColorFormat.RGBa, ColorType.FLOAT16)
-        //postSteps += FilterPostStep(1.0, BloomCombine(), listOf("emissive", "bloom"), "emissive", ColorFormat.RGBa, ColorType.FLOAT16)
+        postSteps += FilterPostStep(1.0, BloomCombine(), listOf("emissive", "bloom"), "emissive", ColorFormat.RGBa, ColorType.FLOAT16)
 
 
         // -- insert Screen-space ambient occlusions step at half-scale

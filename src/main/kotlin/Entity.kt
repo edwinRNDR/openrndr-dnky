@@ -50,6 +50,12 @@ fun geometry(vertexBuffer: VertexBuffer,
     return Geometry(listOf(vertexBuffer), null, primitive, offset, vertexCount)
 }
 
+fun geometry(vertexBuffers: List<VertexBuffer>,
+             primitive: DrawPrimitive = DrawPrimitive.TRIANGLES,
+             offset: Int = 0, vertexCount: Int = vertexBuffers[0].vertexCount): Geometry {
+    return Geometry(vertexBuffers, null, primitive, offset, vertexCount)
+}
+
 
 fun geometry(init: GeometryBuilder.() -> Unit): Geometry {
     val builder = GeometryBuilder()
