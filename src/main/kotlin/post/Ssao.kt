@@ -8,7 +8,7 @@ import org.openrndr.math.Matrix44
 import org.openrndr.math.Vector4
 import org.openrndr.math.mix
 
-class Ssao : Filter(Shader.createFromCode(filterVertexCode, filterFragmentCode("ssao.frag"))) {
+class Ssao : Filter(Shader.createFromCode(filterVertexCode, filterFragmentCode("ssao.frag"),"ssao")) {
     var projection: Matrix44 by parameters
     var positions: Int by parameters
     var normals: Int by parameters
@@ -31,7 +31,7 @@ class Ssao : Filter(Shader.createFromCode(filterVertexCode, filterFragmentCode("
 }
 
 
-class OcclusionBlur : Filter(Shader.createFromCode(filterVertexCode, filterFragmentCode("occlusion-blur.frag"))) {
+class OcclusionBlur : Filter(Shader.createFromCode(filterVertexCode, filterFragmentCode("occlusion-blur.frag"),"occlusion-blur")) {
     var occlusion: Int by parameters
     var positions: Int by parameters
     var normals: Int by parameters

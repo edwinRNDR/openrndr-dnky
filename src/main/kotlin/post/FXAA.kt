@@ -3,7 +3,7 @@ package org.openrndr.dnky.post
 import org.openrndr.draw.Filter
 import org.openrndr.draw.Shader
 
-class FXAA : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmentCode("fxaa.frag"))) {
+class FXAA : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmentCode("fxaa.frag"),"fxaa")) {
 
     var lumaThreshold: Double by parameters
     var maxSpan: Double by parameters

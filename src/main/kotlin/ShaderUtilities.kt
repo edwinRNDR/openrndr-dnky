@@ -35,6 +35,7 @@ vec4 textureNoTile(in sampler2D noiseTex, in sampler2D tex, in vec2 noiseOffset,
 """
 
 val shaderNoRepetitionVert = """
+// shaderNoRepetitionVert
 float sum( vec3 v ) { return v.x+v.y+v.z; }
     
 // based on https://www.shadertoy.com/view/Xtl3zf 
@@ -65,10 +66,8 @@ vec4 textureNoTile(in sampler2D tex, in vec2 noiseOffset, in vec2 x)
 }
 """
 
-
-
-
 val shaderProjectOnPlane = """
+// shaderProjectOnPlane
 vec3 projectOnPlane(vec3 p, vec3 pc, vec3 pn) {
     float distance = dot(pn, p-pc);
     return p - distance * pn;
@@ -88,7 +87,7 @@ vec3 linePlaneIntersect(in vec3 lp, in vec3 lv, in vec3 pc, in vec3 pn){
 """.trimIndent()
 
 val shaderVSM = """
-| float linstep(float min, float max, float v)
+|float linstep(float min, float max, float v)
 |{
 |  return clamp((v - min) / (max - min), 0, 1);
 |}
@@ -120,7 +119,6 @@ vec2 hash22(vec2 p) {
     p3 += dot(p3, p3.yzx+19.19);
     return fract(vec2((p3.x + p3.y)*p3.z, (p3.x+p3.z)*p3.y));
 }
-
 
 #define PI 3.1415926535
 

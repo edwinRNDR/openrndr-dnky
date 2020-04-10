@@ -182,7 +182,7 @@ vec4 iCappedCone( in vec3  ro, in vec3  rd,
 private val volumetricFilters = mutableMapOf<String, Filter>()
 fun generateVolumetricLights(context: LightContext): Filter {
     val shader = generateShader(context)
-    val filter = volumetricFilters.getOrPut(shader) { Filter(filterShaderFromCode(shader)) }
+    val filter = volumetricFilters.getOrPut(shader) { Filter(filterShaderFromCode(shader,"ok")) }
 
     context.lights.forEachIndexed { index, content ->
         val light = content.content

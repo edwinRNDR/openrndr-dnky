@@ -462,9 +462,9 @@ class SceneRenderer {
                         filter.depthBufferOut = it
                     }
 
-                    filter.effectiveShader.begin()
-                    drawer.context.applyToShader(filter.effectiveShader)
-                    filter.effectiveShader.end()
+                    filter.shader.begin()
+                    drawer.context.applyToShader(filter.shader)
+                    filter.shader.end()
 
                     filter.apply(emptyArray(), RenderTarget.active.colorBuffers.toTypedArray())
                     tempDepth.destroy()

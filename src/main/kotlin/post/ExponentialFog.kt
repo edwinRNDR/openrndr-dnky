@@ -7,7 +7,7 @@ import org.openrndr.draw.Shader
 /**
  * Exponential fog filter
  */
-class ExponentialFog : Filter(Shader.createFromCode(filterVertexCode, filterFragmentCode("exponential-fog.frag"))) {
+class ExponentialFog : Filter(Shader.createFromCode(filterVertexCode, filterFragmentCode("exponential-fog.frag"),"exponential-fog")) {
     var density: Double by parameters
     var power: Double by parameters
 

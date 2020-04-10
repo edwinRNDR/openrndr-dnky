@@ -6,7 +6,7 @@ import org.openrndr.draw.*
 import org.openrndr.math.Vector2
 
 
-class HexDof : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmentCode("hex-dof-pass-1.frag"))) {
+class HexDof : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmentCode("hex-dof-pass-1.frag"),"hex-dof-1")) {
     private var pass1 = Pass1()
     private var pass2 = Pass2()
     private var vertical: ColorBuffer? = null
@@ -15,7 +15,7 @@ class HexDof : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragm
     var phase: Double = 0.0
     var samples = 20
 
-    class Pass1 : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmentCode("hex-dof-pass-1.frag"))) {
+    class Pass1 : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmentCode("hex-dof-pass-1.frag"),"hex-dof-1")) {
         var image: Int by parameters
 
         init {
@@ -23,7 +23,7 @@ class HexDof : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragm
         }
     }
 
-    class Pass2 : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmentCode("hex-dof-pass-2.frag"))) {
+    class Pass2 : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmentCode("hex-dof-pass-2.frag"),"hex-dof-2")) {
         var vertical: Int by parameters
         var diagonal: Int by parameters
         var original: Int by parameters
@@ -69,7 +69,7 @@ class HexDof : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragm
     }
 }
 
-class PositionToCoc : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmentCode("position-to-coc.frag"))) {
+class PositionToCoc : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmentCode("position-to-coc.frag"),"position-to-coc")) {
     var minCoc: Double by parameters
     var maxCoc: Double by parameters
 

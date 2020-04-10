@@ -434,7 +434,7 @@ class BasicMaterial : Material {
 
             shadeStyle {
                 vertexPreamble = """
-|                    $shaderNoRepetitionVert
+                    $shaderNoRepetitionVert
                      ${(this@BasicMaterial.vertexPreamble)?:""}
                 """.trimIndent()
                 fragmentPreamble = """

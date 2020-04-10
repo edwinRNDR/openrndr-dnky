@@ -8,7 +8,7 @@ import org.openrndr.draw.colorBuffer
 import org.openrndr.math.Vector2
 
 class ApproximateGaussianBlur : Filter(Shader.createFromCode(Filter.filterVertexCode,
-        filterFragmentCode("approximate-gaussian-blur.frag"))) {
+        filterFragmentCode("approximate-gaussian-blur.frag"),"approximate-gaussian-blur")) {
 
     var window: Int by parameters
     var spread: Double by parameters

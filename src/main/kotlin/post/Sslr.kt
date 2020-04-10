@@ -4,7 +4,7 @@ import org.openrndr.draw.Filter
 import org.openrndr.draw.Shader
 import org.openrndr.math.Matrix44
 
-class Sslr : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmentCode("sslr.frag"))) {
+class Sslr : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmentCode("sslr.frag"),"sslr")) {
     var projection: Matrix44 by parameters
     var colors: Int by parameters
     var positions: Int by parameters
@@ -35,7 +35,7 @@ class Sslr : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmen
     }
 }
 
-class SslrCombiner : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmentCode("sslr-combiner.frag"))) {
+class SslrCombiner : Filter(Shader.createFromCode(Filter.filterVertexCode, filterFragmentCode("sslr-combiner.frag"),"sslr-combiner")) {
 
     var colors: Int by parameters
     var reflections: Int by parameters
